@@ -6,6 +6,14 @@
   "type": "module",
   "license": "MIT",
   "author": "qiuliw",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiuliw/sarcasm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qiuliw/sarcasm/issues"
+  },
+  "homepage": "https://github.com/qiuliw/sarcasm#readme",
   "keywords": [
     "browser-extension",
     "wxt",
