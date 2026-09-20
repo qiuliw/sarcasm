@@ -1,6 +1,6 @@
 {
   "name": "sarcasm",
-  "description": "Independent overlay comments for Bilibili / Douyin, with local SQLite and optional Nostr sync",
+  "description": "B站 / 抖音外挂评论面板：本机 SQLite 存储，可选 Nostr 同步",
   "private": false,
   "version": "0.1.0",
   "type": "module",

@@ -16,7 +16,7 @@ export default defineConfig({
       default_title: 'sarcasm',
     },
     name: 'sarcasm',
-    description: 'Independent comments for Bilibili / Douyin with optional Nostr sync',
+    description: 'B站 / 抖音外挂评论：本机存储，可选同步 Nostr',
     permissions: ['storage', 'alarms'],
     host_permissions: [
       '*://*.bilibili.com/*',

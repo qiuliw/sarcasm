@@ -1,49 +1,49 @@
 # sarcasm
 
-Browser extension for independent comments on Bilibili / Douyin video pages.
+在 B 站 / 抖音视频页注入**独立评论面板**的浏览器插件。
 
-Built with **WXT (MV3) + Svelte 5 + sql.js**. Comments are keyed by video ID, stored locally, and can sync to Nostr relays in the background.
+技术栈：**WXT（MV3）+ Svelte 5 + sql.js**。评论按视频 ID 挂载，本机存储，可选后台同步到 Nostr relay。
 
-## Features
+## 功能
 
-- Floating comment panel on Bilibili / Douyin video pages
-- JSON **anchor packs** (built-in + import/export) for video ID detection
-- Nostr identity (`nsec`) with display name
-- Local SQLite via sql.js; optional async Nostr publish with retry + trash for permanent failures
-- In-panel settings (identity / sync / anchors / reset)
+- 视频页右下角悬浮评论面板
+- JSON **锚点规则包**（内置 B 站 / 抖音，可导入导出）
+- Nostr 身份（`nsec`）与显示名
+- 本地 SQLite；可选异步发到 Nostr（失败重试 + 永久失败进垃圾桶）
+- 面板内设置：身份 / 同步 / 锚点 / 重置配置
 
-## Install (development)
+## 开发安装
 
-Requires [Bun](https://bun.sh/) and Chrome/Chromium.
+需要 [Bun](https://bun.sh/) 与 Chrome/Chromium。
 
 ```bash
 bun install
 bun run dev
 ```
 
-Load `.output/chrome-mv3-dev` at `chrome://extensions` (Developer mode → Load unpacked) if the browser does not open automatically.
+若浏览器未自动打开，到 `chrome://extensions` 开启「开发者模式」，加载 `.output/chrome-mv3-dev`。
 
 ```bash
-bun run build   # .output/chrome-mv3
-bun run zip     # packaged zip
+bun run build   # 产物 .output/chrome-mv3
+bun run zip     # 打包 zip
 bun run test:unit
-bun run test    # unit + Chrome smoke
+bun run test    # 单元测试 + Chrome 冒烟
 ```
 
-## Privacy
+## 隐私
 
-- Comments and drafts stay in `chrome.storage.local` on your device
-- Private keys (`nsec`) never leave the machine except when you enable Nostr publish
-- Resetting config clears identity / sync / custom anchors / drafts; it does **not** delete local comments
+- 评论与草稿保存在本机 `chrome.storage.local`
+- 私钥 `nsec` 仅在开启 Nostr 发布时用于签名上链，不会上传到本项目服务器
+- 「重置所有配置」会清除身份 / 同步 / 自定义锚点 / 草稿，**不会**删除本机评论
 
-## Architecture (short)
+## 架构（简）
 
-| Layer | Role |
+| 层 | 职责 |
 | --- | --- |
-| Content UI | Shadow-root overlay panel |
-| Background | SQLite CRUD, outbox flush, messaging |
-| Anchors | Declarative host/path rules → `platform` + `videoId` |
-| Backends | Local always; Nostr via queued publish |
+| Content UI | Shadow DOM 悬浮面板 |
+| Background | SQLite CRUD、出站队列、消息 |
+| 锚点 | 主机 / 路径规则 → `platform` + `videoId` |
+| 事件源 | 本地必写；Nostr 走队列发布 |
 
 ```sql
 comments(
@@ -55,10 +55,10 @@ comments(
 )
 ```
 
-## Notes
+## 说明
 
-- `extension-key.b64` / `extension-id.txt` pin a stable extension ID for smoke tests
-- Site layout changes are usually fixed by updating anchor JSON, not code
+- `extension-key.b64` / `extension-id.txt` 用于固定扩展 ID，方便冒烟测试
+- 站点改版通常只需更新锚点 JSON，不必改代码
 
 ## License
 
