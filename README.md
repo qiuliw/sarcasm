@@ -18,10 +18,11 @@
 ## 功能
 
 - 识别当前视频锚点：`bilibili` 的 `BVxxxx` / `av`，`douyin` 的数字 `awemeId`
-- 回复视频（`video_id`）
-- 回复外挂评论（`parent_id`，两级楼）
-- 点赞 / 点踩（可切换、再点取消）
-- 本地 SQLite schema 已按可同步后端设计
+- 回复视频 / 外挂评论（两级楼）
+- 点赞 / 点踩
+- **Nostr 密钥身份**（设置页生成或导入 nsec）
+- 发评时可同步发布到 Nostr relay 社区
+- 本地 SQLite 存储 + 按视频草稿
 
 ## 开发
 
