@@ -331,12 +331,13 @@
       {/if}
     </button>
   {:else}
-    <aside
+    <div
       class="panel"
       class:panel-empty={!hasComments && !loading && !inSettings}
       onkeydown={stopPanelKeyBubble}
       onkeyup={stopPanelKeyBubble}
       onkeypress={stopPanelKeyBubble}
+      role="presentation"
     >
       <header class="head">
         <div class="context">
@@ -469,7 +470,7 @@
           onClearTarget={() => void handleClearTarget()}
         />
       {/if}
-    </aside>
+    </div>
   {/if}
 </div>
 
