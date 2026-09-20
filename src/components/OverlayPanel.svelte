@@ -42,7 +42,6 @@
   const platformLabel = $derived(
     packs.find((p) => p.id === context?.platform)?.name || context?.platform || '',
   );
-  const authorLabel = $derived(identity?.shortLabel || '未配置密钥');
 
   let stopNav: (() => void) | null = null;
   let highlightTimer: number | undefined;
@@ -262,8 +261,8 @@
       type="button"
       class="fab"
       onclick={() => void setOpen(true)}
-      title="打开外挂评论"
-      aria-label="打开外挂评论"
+      title="打开评论"
+      aria-label="打开评论"
       aria-expanded="false"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -280,7 +279,7 @@
       <header class="head">
         <div class="context">
           <div class="context-line">
-            <strong class="title">{inSettings ? '设置' : '外挂评论'}</strong>
+            <strong class="title">{inSettings ? '设置' : '评论'}</strong>
             {#if !inSettings && commentCount > 0}
               <span class="count">{commentCount}</span>
             {/if}
@@ -398,7 +397,6 @@
           bind:body={composerBody}
           target={replyTarget}
           disabled={!context || !identity?.configured}
-          author={authorLabel}
           onSubmit={handleSubmit}
           onClearTarget={() => void handleClearTarget()}
         />

@@ -19,7 +19,6 @@
     identityFromSettings,
     type NostrSettings,
   } from '../lib/nostr/settings';
-  import { shortNpub } from '../lib/nostr/keys';
   import type { AnchorPack } from '../lib/anchors/packs';
   import { availableBackends, type BackendId } from '../lib/backends/dispatch';
 
@@ -47,6 +46,11 @@
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
   const backends = availableBackends();
+  const identityLabel = $derived(
+    identity?.configured
+      ? identity.displayName || '已配置'
+      : '未配置',
+  );
 
   async function refresh() {
     settings = await getNostrSettings();
@@ -135,9 +139,7 @@
 
   <section class="card">
     <h2>身份</h2>
-    {#if identity?.configured && identity.npub}
-      <p class="mono" title={identity.npub}>{shortNpub(identity.npub)}</p>
-    {/if}
+    <p class="mono" class:muted={!identity?.configured}>{identityLabel}</p>
 
     <label class="field">
       <span>显示名</span>
@@ -396,10 +398,14 @@
 
   .mono {
     margin: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 12px;
+    font-weight: 500;
     color: var(--sc-accent, #fb7299);
-    word-break: break-all;
+  }
+
+  .mono.muted {
+    color: var(--sc-faint, #9499a0);
+    font-weight: 400;
   }
 
   .field {

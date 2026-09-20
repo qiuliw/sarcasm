@@ -4,7 +4,6 @@
   interface Props {
     target: ReplyTarget | null;
     disabled?: boolean;
-    author: string;
     body?: string;
     onSubmit: (body: string) => Promise<void> | void;
     onClearTarget: () => void;
@@ -13,7 +12,6 @@
   let {
     target,
     disabled = false,
-    author,
     body = $bindable(''),
     onSubmit,
     onClearTarget,
@@ -83,7 +81,6 @@
   {/if}
 
   <div class="row">
-    <span class="author" title={author}>{author}</span>
     <input
       bind:this={inputEl}
       class="line"
@@ -162,20 +159,9 @@
     align-items: center;
     gap: 8px;
     min-height: 36px;
-    padding: 0 4px 0 10px;
+    padding: 0 4px 0 14px;
     border-radius: 18px;
     background: var(--sc-surface);
-  }
-
-  .author {
-    flex-shrink: 0;
-    max-width: 4.8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--sc-muted);
-    font-size: 12px;
-    font-weight: 500;
   }
 
   .line {

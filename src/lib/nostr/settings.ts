@@ -4,7 +4,6 @@ import {
   pubkeyToNpub,
   secretToNsec,
   secretToPubkey,
-  shortNpub,
   tryParseNsec,
 } from './keys';
 
@@ -124,7 +123,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       configured: true,
       npub,
       pubkey,
-      shortLabel: settings.displayName || shortNpub(npub),
+      shortLabel: settings.displayName || '我',
       displayName: settings.displayName,
       publishEnabled: settings.publishEnabled,
       relays: settings.relays,
