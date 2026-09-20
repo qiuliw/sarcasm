@@ -7,6 +7,9 @@
     /** 一级评论才展示楼中楼列表 */
     showReplies?: boolean;
     highlightId?: string | null;
+    /** 父级记住哪些楼已展开，避免刷新后被重新折叠 */
+    expanded?: boolean;
+    onExpand?: (rootId: string) => void;
     onReply: (node: CommentTreeNode) => void;
     onDelete: (id: string) => void;
   }
@@ -15,21 +18,28 @@
     node,
     showReplies = true,
     highlightId = null,
+    expanded = false,
+    onExpand,
     onReply,
     onDelete,
   }: Props = $props();
 
   let confirmDelete = $state(false);
-  let expanded = $state(false);
 
   const COLLAPSE_AT = 3;
+
+  const highlightInChildren = $derived(
+    !!highlightId && node.children.some((child) => child.id === highlightId),
+  );
+  const isExpanded = $derived(expanded || highlightInChildren);
+
   const visibleChildren = $derived(
-    showReplies && node.children.length > COLLAPSE_AT && !expanded
+    showReplies && node.children.length > COLLAPSE_AT && !isExpanded
       ? node.children.slice(0, COLLAPSE_AT)
       : node.children,
   );
   const hiddenCount = $derived(
-    showReplies && node.children.length > COLLAPSE_AT && !expanded
+    showReplies && node.children.length > COLLAPSE_AT && !isExpanded
       ? node.children.length - COLLAPSE_AT
       : 0,
   );
@@ -64,6 +74,10 @@
 
   function cancelDelete() {
     confirmDelete = false;
+  }
+
+  function expandReplies() {
+    onExpand?.(node.id);
   }
 
   const deleteLabel = $derived(
@@ -114,7 +128,7 @@
         />
       {/each}
       {#if hiddenCount > 0}
-        <button type="button" class="more" onclick={() => (expanded = true)}>
+        <button type="button" class="more" onclick={expandReplies}>
           展开剩余 {hiddenCount} 条回复
         </button>
       {/if}

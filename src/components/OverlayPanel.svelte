@@ -18,6 +18,7 @@
   let nativePreviews = $state<Record<string, string>>({});
   let scrollEl = $state<HTMLDivElement | null>(null);
   let author = $state(getDefaultAuthor());
+  let expandedRoots = $state<Record<string, true>>({});
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
@@ -60,6 +61,7 @@
     if (switched) {
       clearReplyTarget();
       highlightId = null;
+      expandedRoots = {};
     }
     if (!context) {
       rows = [];
@@ -111,13 +113,26 @@
       replyToAuthor: target.kind === 'overlay_comment' ? target.replyToAuthor ?? null : null,
     });
 
+    // 回复楼中楼后保持该楼展开，避免新回复被折叠藏住
+    if (target.kind === 'overlay_comment') {
+      const rootId = target.threadRootId ?? target.targetId;
+      if (rootId) {
+        expandedRoots = { ...expandedRoots, [rootId]: true };
+      }
+    }
+
     clearReplyTarget();
     await reloadComments();
     await flashAndScroll(created.id);
   }
 
+  function expandRoot(rootId: string) {
+    expandedRoots = { ...expandedRoots, [rootId]: true };
+  }
+
   function replyOverlay(node: CommentTreeNode) {
     const resolved = resolveOverlayReply(node);
+    expandedRoots = { ...expandedRoots, [resolved.threadRootId]: true };
     replyTarget = {
       kind: 'overlay_comment',
       targetId: node.id,
@@ -301,6 +316,8 @@
                   <CommentItem
                     {node}
                     {highlightId}
+                    expanded={!!expandedRoots[node.id]}
+                    onExpand={expandRoot}
                     onReply={replyOverlay}
                     onDelete={handleDelete}
                   />
@@ -320,6 +337,8 @@
                   <CommentItem
                     {node}
                     {highlightId}
+                    expanded={!!expandedRoots[node.id]}
+                    onExpand={expandRoot}
                     onReply={replyOverlay}
                     onDelete={handleDelete}
                   />
