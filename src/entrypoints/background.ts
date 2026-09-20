@@ -36,6 +36,7 @@ import {
   saveDisplayName,
   saveNostrSettings,
 } from '../lib/nostr/settings';
+import { resetAllConfig } from '../lib/prefs/reset';
 
 export default defineBackground(() => {
   void ensureDb().catch((err) => {
@@ -149,6 +150,9 @@ async function handle(message: BgRequest): Promise<BgResponse> {
     case 'anchors_clear_custom':
       await saveCustomPacks([]);
       return { ok: true, data: [] };
+    case 'reset_all_config':
+      await resetAllConfig();
+      return { ok: true };
     default:
       return { ok: false, error: 'unknown message' };
   }

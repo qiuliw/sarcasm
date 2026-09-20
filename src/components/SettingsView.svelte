@@ -11,6 +11,7 @@
     importAnchorPacks,
     importNostrKeyApi,
     listAnchorPacks,
+    resetAllConfigApi,
     saveDisplayNameApi,
     saveNostrSettingsApi,
     setEnabledBackends,
@@ -37,6 +38,7 @@
   let showExport = $state(false);
   let showImport = $state(false);
   let showSync = $state(false);
+  let confirmReset = $state(false);
   let rulesPanel = $state<'export' | 'import' | null>(null);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
   let status = $state('');
@@ -444,6 +446,58 @@
       </button>
     {/if}
   </section>
+
+  <section class="card danger-card">
+    <h2>重置</h2>
+    {#if !confirmReset}
+      <p class="hint">清除身份、同步、锚点与草稿，不删除本机评论。</p>
+      <button
+        type="button"
+        class="ghost danger"
+        disabled={busy}
+        onclick={() => {
+          confirmReset = true;
+          status = '';
+          error = '';
+        }}
+      >
+        重置所有配置
+      </button>
+    {:else}
+      <p class="hint warn">将清除密钥与自定义规则，此操作不可撤销。</p>
+      <div class="actions">
+        <button
+          type="button"
+          class="danger-fill"
+          disabled={busy}
+          onclick={() =>
+            void run(async () => {
+              await resetAllConfigApi();
+              confirmReset = false;
+              showImport = false;
+              showSync = false;
+              showExport = false;
+              exportedNsec = '';
+              nsecInput = '';
+              rulesPanel = null;
+              packJson = '';
+            }, '配置已重置')}
+        >
+          确认重置
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy}
+          onclick={() => {
+            confirmReset = false;
+          }}
+        >
+          取消
+        </button>
+      </div>
+    {/if}
+  </section>
 </div>
 
 <style>
@@ -638,6 +692,23 @@
   button.ghost.active {
     border-color: var(--sc-accent, #fb7299);
     color: var(--sc-accent, #fb7299);
+  }
+
+  button.ghost.danger {
+    color: #c4564e;
+    border-color: #f0c4c0;
+  }
+
+  button.danger-fill {
+    background: #f85a54;
+  }
+
+  .danger-card {
+    border-color: #f0c4c0;
+  }
+
+  .hint.warn {
+    color: #c4564e;
   }
 
   button:disabled {

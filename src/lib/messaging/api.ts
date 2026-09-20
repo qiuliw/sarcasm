@@ -33,7 +33,8 @@ export type BgRequest =
   | { type: 'anchors_list' }
   | { type: 'anchors_export'; includeBuiltin?: boolean }
   | { type: 'anchors_import'; json: string }
-  | { type: 'anchors_clear_custom' };
+  | { type: 'anchors_clear_custom' }
+  | { type: 'reset_all_config' };
 
 export type BgResponse =
   | { ok: true; data?: unknown }
@@ -134,4 +135,8 @@ export function importAnchorPacks(json: string): Promise<AnchorPack[]> {
 
 export function clearCustomAnchorPacks(): Promise<AnchorPack[]> {
   return sendBg({ type: 'anchors_clear_custom' });
+}
+
+export function resetAllConfigApi(): Promise<void> {
+  return sendBg({ type: 'reset_all_config' });
 }
