@@ -72,6 +72,23 @@ async function runCrud(page) {
   assert(reply.data?.replyToAuthor === 'tester', '二级回复未写入 @用户名');
   assert(reply.data?.parentId === created.data.id, '二级应挂在一级下');
 
+  const liked = await send(page, {
+    type: 'vote_comment',
+    input: { id: created.data.id, vote: 'up' },
+  });
+  assert(liked?.ok, `like failed: ${JSON.stringify(liked)}`);
+  assert(liked.data?.likes === 1 && liked.data?.myVote === 'up', '点赞未生效');
+
+  const disliked = await send(page, {
+    type: 'vote_comment',
+    input: { id: created.data.id, vote: 'down' },
+  });
+  assert(disliked?.ok, `dislike failed: ${JSON.stringify(disliked)}`);
+  assert(
+    disliked.data?.likes === 0 && disliked.data?.dislikes === 1 && disliked.data?.myVote === 'down',
+    '点踩切换未生效',
+  );
+
   const listed = await send(page, {
     type: 'list_comments',
     query: { platform: 'bilibili', videoId: 'BV_SMOKE_TEST' },
@@ -110,13 +127,13 @@ async function runPopupUi(page, errors) {
   await page.waitForFunction(
     () => {
       const text = document.body?.innerText || '';
-      return text.includes('本地评论') && text.includes('外挂评论');
+      return text.includes('本机已存') && text.includes('sarcasm');
     },
     { timeout: 15000 },
   );
   const body = await page.evaluate(() => document.body.innerText);
-  assert(body.includes('外挂评论'), 'popup 未显示功能标题');
-  assert(body.includes('本地评论'), `popup 未拿到 stats 区域：${body}`);
+  assert(body.includes('sarcasm'), 'popup 未显示品牌');
+  assert(body.includes('本机已存'), `popup 未拿到 stats 区域：${body}`);
   assert(
     !errors.some((e) => /XMLHttpRequest|Content Security|CompileError|wasm/i.test(e)),
     `popup 仍有 wasm/csp 错误：${errors.join(' | ')}`,

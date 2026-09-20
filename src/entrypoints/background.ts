@@ -4,6 +4,7 @@ import {
   deleteComment,
   ensureDb,
   listComments,
+  voteComment,
 } from '../lib/db/sqlite';
 import type { BgRequest, BgResponse } from '../lib/messaging/api';
 
@@ -32,6 +33,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
     case 'delete_comment':
       await deleteComment(message.id);
       return { ok: true };
+    case 'vote_comment':
+      return { ok: true, data: await voteComment(message.input) };
     case 'stats':
       return { ok: true, data: { count: await countAll() } };
     default:

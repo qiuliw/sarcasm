@@ -2,9 +2,15 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
-  import { createComment, deleteComment, listComments } from '../lib/messaging/api';
+  import { createComment, deleteComment, listComments, voteComment } from '../lib/messaging/api';
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
-  import type { CommentRecord, CommentTreeNode, PageContext, ReplyTarget } from '../lib/db/types';
+  import type {
+    CommentRecord,
+    CommentTreeNode,
+    PageContext,
+    ReplyTarget,
+    VoteKind,
+  } from '../lib/db/types';
   import { readPageContext, resolveAdapter } from '../lib/platforms';
   import { getDefaultAuthor, loadAuthor, saveAuthor } from '../lib/prefs/author';
 
@@ -145,6 +151,11 @@
   async function handleDelete(id: string) {
     await deleteComment(id);
     await reloadComments();
+  }
+
+  async function handleVote(id: string, vote: VoteKind) {
+    const updated = await voteComment(id, vote);
+    rows = rows.map((row) => (row.id === id ? updated : row));
   }
 
   async function rememberNativePreview(id: string, preview: string) {
@@ -320,6 +331,7 @@
                     onExpand={expandRoot}
                     onReply={replyOverlay}
                     onDelete={handleDelete}
+                    onVote={handleVote}
                   />
                 {/each}
               </div>
@@ -341,6 +353,7 @@
                     onExpand={expandRoot}
                     onReply={replyOverlay}
                     onDelete={handleDelete}
+                    onVote={handleVote}
                   />
                 {/each}
               </div>

@@ -1,5 +1,13 @@
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
-import type { CommentRecord, CreateCommentInput, ListCommentsQuery, Platform } from './types';
+import type {
+  CommentRecord,
+  CreateCommentInput,
+  ListCommentsQuery,
+  Platform,
+  VoteCommentInput,
+  VoteKind,
+} from './types';
+import { applyVote } from './vote';
 
 const STORAGE_KEY = 'overlay_comments_sqlite_v1';
 
@@ -17,6 +25,9 @@ CREATE TABLE IF NOT EXISTS comments (
   reply_to_author TEXT,
   author TEXT NOT NULL,
   body TEXT NOT NULL,
+  likes INTEGER NOT NULL DEFAULT 0,
+  dislikes INTEGER NOT NULL DEFAULT 0,
+  my_vote TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -54,8 +65,18 @@ async function persist(): Promise<void> {
 function migrate(database: Database) {
   const cols = database.exec(`PRAGMA table_info(comments)`);
   const names = new Set((cols[0]?.values ?? []).map((row) => String(row[1])));
-  if (names.size > 0 && !names.has('reply_to_author')) {
+  if (names.size === 0) return;
+  if (!names.has('reply_to_author')) {
     database.run(`ALTER TABLE comments ADD COLUMN reply_to_author TEXT`);
+  }
+  if (!names.has('likes')) {
+    database.run(`ALTER TABLE comments ADD COLUMN likes INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!names.has('dislikes')) {
+    database.run(`ALTER TABLE comments ADD COLUMN dislikes INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!names.has('my_vote')) {
+    database.run(`ALTER TABLE comments ADD COLUMN my_vote TEXT`);
   }
 }
 
@@ -77,6 +98,10 @@ export function ensureDb(): Promise<void> {
   return ready;
 }
 
+function parseMyVote(value: unknown): VoteKind | null {
+  return value === 'up' || value === 'down' ? value : null;
+}
+
 function rowToComment(row: Record<string, unknown>): CommentRecord {
   return {
     id: String(row.id),
@@ -87,6 +112,9 @@ function rowToComment(row: Record<string, unknown>): CommentRecord {
     replyToAuthor: row.reply_to_author == null ? null : String(row.reply_to_author),
     author: String(row.author),
     body: String(row.body),
+    likes: Number(row.likes ?? 0),
+    dislikes: Number(row.dislikes ?? 0),
+    myVote: parseMyVote(row.my_vote),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
@@ -128,6 +156,9 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
     replyToAuthor: input.replyToAuthor?.trim() || null,
     author: input.author?.trim() || '我',
     body: input.body.trim(),
+    likes: 0,
+    dislikes: 0,
+    myVote: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -138,8 +169,9 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
 
   database.run(
     `INSERT INTO comments
-      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
+       likes, dislikes, my_vote, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.platform,
@@ -149,12 +181,43 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
       record.replyToAuthor,
       record.author,
       record.body,
+      record.likes,
+      record.dislikes,
+      record.myVote,
       record.createdAt,
       record.updatedAt,
     ],
   );
   await persist();
   return record;
+}
+
+export async function voteComment(input: VoteCommentInput): Promise<CommentRecord> {
+  await ensureDb();
+  const database = await open();
+  const rows = queryAll(database, `SELECT * FROM comments WHERE id = ?`, [input.id]);
+  const current = rows[0];
+  if (!current) throw new Error('评论不存在');
+
+  const next = applyVote(
+    { likes: current.likes, dislikes: current.dislikes, myVote: current.myVote },
+    input.vote,
+  );
+  const updatedAt = Date.now();
+  database.run(
+    `UPDATE comments
+     SET likes = ?, dislikes = ?, my_vote = ?, updated_at = ?
+     WHERE id = ?`,
+    [next.likes, next.dislikes, next.myVote, updatedAt, input.id],
+  );
+  await persist();
+  return {
+    ...current,
+    likes: next.likes,
+    dislikes: next.dislikes,
+    myVote: next.myVote,
+    updatedAt,
+  };
 }
 
 export async function deleteComment(id: string): Promise<void> {

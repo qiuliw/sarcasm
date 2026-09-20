@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CommentTreeNode } from '../lib/db/types';
+  import type { CommentTreeNode, VoteKind } from '../lib/db/types';
   import CommentItem from './CommentItem.svelte';
 
   interface Props {
@@ -12,6 +12,7 @@
     onExpand?: (rootId: string) => void;
     onReply: (node: CommentTreeNode) => void;
     onDelete: (id: string) => void;
+    onVote: (id: string, vote: VoteKind) => void;
   }
 
   let {
@@ -22,6 +23,7 @@
     onExpand,
     onReply,
     onDelete,
+    onVote,
   }: Props = $props();
 
   let confirmDelete = $state(false);
@@ -102,6 +104,46 @@
         {node.body}
       </p>
       <footer>
+        <button
+          type="button"
+          class="vote"
+          class:active={node.myVote === 'up'}
+          title="点赞"
+          aria-pressed={node.myVote === 'up'}
+          onclick={() => onVote(node.id, 'up')}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M7 22V10l5-7a2.5 2.5 0 0 1 4.6 1.6L15.8 10H20a2 2 0 0 1 1.9 2.6l-1.8 7A2 2 0 0 1 18.2 22H7Z"
+            />
+            <path d="M7 10v12H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3Z" />
+          </svg>
+          {#if node.likes > 0}
+            <span>{node.likes}</span>
+          {:else}
+            <span>赞</span>
+          {/if}
+        </button>
+        <button
+          type="button"
+          class="vote"
+          class:active={node.myVote === 'down'}
+          title="点踩"
+          aria-pressed={node.myVote === 'down'}
+          onclick={() => onVote(node.id, 'down')}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M17 2v12l-5 7a2.5 2.5 0 0 1-4.6-1.6L8.2 14H4a2 2 0 0 1-1.9-2.6l1.8-7A2 2 0 0 1 5.8 2H17Z"
+            />
+            <path d="M17 14V2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3Z" />
+          </svg>
+          {#if node.dislikes > 0}
+            <span>{node.dislikes}</span>
+          {:else}
+            <span>踩</span>
+          {/if}
+        </button>
         <button type="button" onclick={() => onReply(node)}>回复</button>
         {#if confirmDelete}
           <button type="button" class="danger" onclick={requestDelete}>{deleteLabel}</button>
@@ -125,6 +167,7 @@
           {highlightId}
           {onReply}
           {onDelete}
+          {onVote}
         />
       {/each}
       {#if hiddenCount > 0}
@@ -257,6 +300,30 @@
 
   button.danger:hover {
     color: var(--sc-danger);
+  }
+
+  .vote {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .vote svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .vote.active {
+    color: var(--sc-accent);
+  }
+
+  .vote.active svg {
+    fill: currentColor;
   }
 
   .more {

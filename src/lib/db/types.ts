@@ -1,5 +1,8 @@
 export type Platform = 'bilibili' | 'douyin';
 
+/** 本地点赞状态：赞 / 踩 / 未表态 */
+export type VoteKind = 'up' | 'down';
+
 /** 回复锚点：视频本体 / 平台原生评论 / 外挂评论 */
 export type AnchorKind = 'video' | 'native_comment' | 'overlay_comment';
 
@@ -15,6 +18,10 @@ export interface CommentRecord {
   replyToAuthor: string | null;
   author: string;
   body: string;
+  likes: number;
+  dislikes: number;
+  /** 当前浏览器用户的投票 */
+  myVote: VoteKind | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -56,4 +63,9 @@ export interface CreateCommentInput {
 export interface ListCommentsQuery {
   platform: Platform;
   videoId: string;
+}
+
+export interface VoteCommentInput {
+  id: string;
+  vote: VoteKind;
 }

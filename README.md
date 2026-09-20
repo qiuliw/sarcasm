@@ -21,6 +21,7 @@
 - 回复视频（`video_id`）
 - 回复外挂评论（`parent_id`）
 - 锚定平台原生评论回复（`native_parent_id`；页内「外挂回复」按钮 + 侧栏列表）
+- 点赞 / 点踩（可切换、再点取消）
 - 本地 SQLite schema 已按可同步后端设计
 
 ## 开发
@@ -74,7 +75,10 @@ comments(
   id, platform, video_id,
   parent_id,          -- 外挂楼中楼
   native_parent_id,   -- 锚定平台评论 id
-  author, body, created_at, updated_at
+  reply_to_author,
+  author, body,
+  likes, dislikes, my_vote,
+  created_at, updated_at
 )
 ```
 

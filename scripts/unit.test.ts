@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
+import { applyVote } from '../src/lib/db/vote';
 import { bilibiliAdapter } from '../src/lib/platforms/bilibili';
 import { douyinAdapter } from '../src/lib/platforms/douyin';
 
@@ -12,6 +13,9 @@ function comment(partial: Partial<CommentRecord> & Pick<CommentRecord, 'id' | 'b
     nativeParentId: null,
     replyToAuthor: null,
     author: 'me',
+    likes: 0,
+    dislikes: 0,
+    myVote: null,
     createdAt: 1,
     updatedAt: 1,
     ...partial,
@@ -55,6 +59,26 @@ describe('resolveOverlayReply', () => {
     expect(resolveOverlayReply(child)).toEqual({
       threadRootId: 'v1',
       replyToAuthor: 'Bob',
+    });
+  });
+});
+
+describe('applyVote', () => {
+  test('toggles like and switches from dislike', () => {
+    expect(applyVote({ likes: 0, dislikes: 0, myVote: null }, 'up')).toEqual({
+      likes: 1,
+      dislikes: 0,
+      myVote: 'up',
+    });
+    expect(applyVote({ likes: 1, dislikes: 0, myVote: 'up' }, 'up')).toEqual({
+      likes: 0,
+      dislikes: 0,
+      myVote: null,
+    });
+    expect(applyVote({ likes: 0, dislikes: 1, myVote: 'down' }, 'up')).toEqual({
+      likes: 1,
+      dislikes: 0,
+      myVote: 'up',
     });
   });
 });
