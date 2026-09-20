@@ -278,21 +278,25 @@
     <aside class="panel" class:panel-empty={!hasComments && !loading && !inSettings}>
       <header class="head">
         <div class="context">
-          <div class="context-line">
-            <strong class="title">{inSettings ? '设置' : '评论'}</strong>
-            {#if !inSettings && commentCount > 0}
-              <span class="count">{commentCount}</span>
-            {/if}
-          </div>
           {#if inSettings}
+            <div class="context-line">
+              <strong class="title">设置</strong>
+            </div>
             <span class="vid">身份 · 同步 · 锚点</span>
           {:else if context}
-            <span class="vid" title={context.title || context.videoId}>
-              {platformLabel}
-              {context.title || context.videoId}
-            </span>
+            <div class="context-line">
+              <strong class="title" title={context.title || context.videoId}>
+                {context.title || context.videoId}
+              </strong>
+              {#if commentCount > 0}
+                <span class="count">{commentCount}</span>
+              {/if}
+            </div>
+            <span class="vid">{platformLabel}</span>
           {:else}
-            <span class="vid">未识别当前视频</span>
+            <div class="context-line">
+              <strong class="title">未识别视频</strong>
+            </div>
           {/if}
         </div>
         <div class="head-actions">
@@ -372,10 +376,6 @@
             <p class="empty">还没有评论，来说两句吧</p>
           {:else}
             <section class="section">
-              <h3>
-                <span>评论</span>
-                <span class="sec-count">{forest.videoRoots.length}</span>
-              </h3>
               <div class="list">
                 {#each forest.videoRoots as node (node.id)}
                   <CommentItem
@@ -644,24 +644,7 @@
   }
 
   .section {
-    padding-top: 8px;
-  }
-
-  h3 {
-    margin: 0 0 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    font-size: 13px;
-    color: var(--sc-muted);
-    font-weight: 500;
-  }
-
-  .sec-count {
-    margin-left: auto;
-    color: var(--sc-faint);
-    font-variant-numeric: tabular-nums;
+    padding-top: 4px;
   }
 
   .list {
