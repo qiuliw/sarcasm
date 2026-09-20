@@ -6,24 +6,23 @@
     clearOutboxTrashApi,
     exportNostrKeyApi,
     generateNostrKeyApi,
-    getEnabledBackends,
     getNostrSettings,
     getStats,
     importNostrKeyApi,
     listOutboxTrash,
+    probeNostrRelaysApi,
     resetAllConfigApi,
     retryOutboxTrashApi,
     saveDisplayNameApi,
     saveNostrSettingsApi,
-    setEnabledBackends,
   } from '../lib/messaging/api';
+  import type { RelayProbeResult } from '../lib/nostr/probe';
   import {
     DEFAULT_RELAYS,
     identityFromSettings,
     type NostrSettings,
   } from '../lib/nostr/settings';
   import { adapterLabel, listPlatformAdapters } from '../lib/platforms';
-  import { availableBackends, type BackendId } from '../lib/backends/dispatch';
   import type { OutboxTrashItem } from '../lib/backends/outbox';
   import {
     clampPanelMaxVh,
@@ -66,24 +65,39 @@
   let confirmClearCache = $state(false);
   let cacheCount = $state<number | null>(null);
   let cacheBytes = $state<number | null>(null);
-  let relayText = $state(DEFAULT_RELAYS.join('\n'));
+  let relayDrafts = $state(
+    DEFAULT_RELAYS.map((url) => ({ id: crypto.randomUUID(), url })),
+  );
+  let relayResults = $state<Record<string, RelayProbeResult>>({});
+  let testingRelays = $state<Record<string, true>>({});
   let status = $state('');
   let error = $state('');
   let busy = $state(false);
-  let enabledBackends = $state<BackendId[]>(['nostr']);
+  let displayNameDraft = $state('');
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
-  const backends = availableBackends();
   const platforms = listPlatformAdapters();
-  let displayNameDraft = $state('');
+  const relayList = $derived(
+    [...new Set(relayDrafts.map((relay) => relay.url.trim()).filter(Boolean))],
+  );
+  const relayDirty = $derived(
+    !!settings && settings.relays.join('\n') !== relayList.join('\n'),
+  );
+  const displayNameDirty = $derived(
+    !!settings &&
+      !!identity?.configured &&
+      displayNameDraft.trim().slice(0, 32) !== settings.displayName,
+  );
 
   async function refresh() {
     settings = await getNostrSettings();
     uiPrefs = await loadUiPrefs();
     displayNameDraft = settings.displayName;
-    relayText = settings.relays.join('\n');
+    relayDrafts = settings.relays.map((url) => ({
+      id: crypto.randomUUID(),
+      url,
+    }));
     nsecInput = '';
-    enabledBackends = await getEnabledBackends();
     try {
       const stats = await getStats();
       cacheCount = stats.count;
@@ -106,16 +120,38 @@
       : `${cacheCount} 条 · ${formatBytes(cacheBytes)}`,
   );
 
-  function parseRelays(text: string): string[] {
-    return text
-      .split(/\n|,/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+  function addRelay() {
+    relayDrafts = [
+      ...relayDrafts,
+      { id: crypto.randomUUID(), url: 'wss://' },
+    ];
   }
 
-  function toggleBackend(id: BackendId, on: boolean) {
-    if (on) enabledBackends = [...new Set([...enabledBackends, id])];
-    else enabledBackends = enabledBackends.filter((x) => x !== id);
+  function removeRelay(id: string) {
+    relayDrafts = relayDrafts.filter((relay) => relay.id !== id);
+  }
+
+  async function testRelayUrls(urls: string[]) {
+    const unique = [...new Set(urls)];
+    if (!unique.length) return;
+    testingRelays = {
+      ...testingRelays,
+      ...Object.fromEntries(unique.map((url) => [url, true as const])),
+    };
+    error = '';
+    try {
+      const results = await probeNostrRelaysApi(unique);
+      relayResults = {
+        ...relayResults,
+        ...Object.fromEntries(results.map((result) => [result.url, result])),
+      };
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      const next = { ...testingRelays };
+      for (const url of unique) delete next[url];
+      testingRelays = next;
+    }
   }
 
   async function run(action: () => Promise<unknown>, okMessage = '已保存') {
@@ -200,7 +236,12 @@
   {/if}
 
   <section class="card">
-    <h2>身份</h2>
+    <h2 class="section-heading">
+      身份
+      {#if displayNameDirty}
+        <span class="save-state">未保存</span>
+      {/if}
+    </h2>
 
     {#if identity?.configured}
       <div class="inline-row">
@@ -210,20 +251,9 @@
           placeholder="显示名（可选）"
           bind:value={displayNameDraft}
         />
-        <button
-          type="button"
-          class="save-sm"
-          disabled={busy}
-          onclick={() =>
-            void run(async () => {
-              await saveDisplayNameApi(displayNameDraft);
-            }, '已保存')}
-        >
-          保存
-        </button>
       </div>
 
-      <div class="actions">
+      <div class="actions identity-actions">
         <button
           type="button"
           class="ghost"
@@ -258,6 +288,17 @@
             }, '已清除')}
         >
           清除
+        </button>
+        <button
+          type="button"
+          class="identity-save"
+          disabled={busy || !displayNameDirty}
+          onclick={() =>
+            void run(async () => {
+              await saveDisplayNameApi(displayNameDraft);
+            }, '已保存')}
+        >
+          保存
         </button>
       </div>
     {:else}
@@ -326,6 +367,7 @@
         确认导入
       </button>
     {/if}
+
   </section>
 
   <section class="card">
@@ -409,7 +451,12 @@
       onclick={() => (showSync = !showSync)}
       aria-expanded={showSync}
     >
-      <h2>同步</h2>
+      <h2 class="section-heading">
+        同步
+        {#if relayDirty}
+          <span class="save-state">未保存</span>
+        {/if}
+      </h2>
       <span class="toggle-meta">
         {#if outboxPending > 0}
           <span class="pending">待同步 {outboxPending}</span>
@@ -505,60 +552,78 @@
         </div>
       {/if}
 
-      {#each backends as backend (backend.id)}
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={enabledBackends.includes(backend.id)}
-            onchange={(e) => toggleBackend(backend.id, e.currentTarget.checked)}
-          />
-          {backend.name}
-        </label>
-      {/each}
+      <h3 class="nostr-heading">
+        <span>Nostr</span>
+        <span class="relay-rule">多个中继至少 2 个接受即成功</span>
+      </h3>
+      <ul class="relay-list">
+        {#each relayDrafts as relay (relay.id)}
+          <li>
+            <input
+              type="text"
+              class="relay-url"
+              bind:value={relay.url}
+              aria-label="Nostr Relay 地址"
+              spellcheck="false"
+            />
+            {#if relay.url.trim()}
+              {@const url = relay.url.trim()}
+              {#if testingRelays[url]}
+                <span class="relay-state testing">连接中…</span>
+              {:else if relayResults[url]?.ok}
+                <span class="relay-state ok">{relayResults[url].latencyMs} ms</span>
+              {:else if relayResults[url]}
+                <span class="relay-state fail" title={relayResults[url].error}>
+                  {relayResults[url].error}
+                </span>
+              {/if}
+              <button
+                type="button"
+                class="ghost relay-test"
+                disabled={!!testingRelays[url]}
+                onclick={() => void testRelayUrls([url])}
+              >
+                测试
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="remove-relay"
+              title="移除"
+              aria-label="移除中继"
+              onclick={() => removeRelay(relay.id)}
+            >
+              ×
+            </button>
+          </li>
+        {/each}
+      </ul>
 
-      {#if enabledBackends.includes('nostr')}
-        <label class="field">
-          <span>Relay</span>
-          <textarea rows={compact ? 3 : 4} bind:value={relayText}></textarea>
-        </label>
-        <p class="hint">配 1 个需成功 1 个；配多个至少成功 2 个。</p>
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={settings?.publishEnabled ?? true}
-            onchange={(e) => {
-              if (settings) settings.publishEnabled = e.currentTarget.checked;
-            }}
-          />
-          发评同步
-        </label>
-        <label class="check">
-          <input
-            type="checkbox"
-            checked={settings?.asyncPublish ?? true}
-            onchange={(e) => {
-              if (settings) settings.asyncPublish = e.currentTarget.checked;
-            }}
-          />
-          后台异步（失败自动重试）
-        </label>
-      {/if}
-
-      <button
-        type="button"
-        disabled={busy || !settings}
-        onclick={() =>
-          void run(async () => {
-            if (!settings) return;
-            await setEnabledBackends(enabledBackends);
-            await saveNostrSettingsApi({
-              ...settings,
-              relays: parseRelays(relayText),
-            });
-          })}
-      >
-        保存
-      </button>
+      <div class="relay-actions">
+        <button type="button" class="ghost" onclick={addRelay}>添加中继</button>
+        <button
+          type="button"
+          class="ghost"
+          disabled={relayList.length === 0 || Object.keys(testingRelays).length > 0}
+          onclick={() => void testRelayUrls(relayList)}
+        >
+          {Object.keys(testingRelays).length > 0 ? '测试中…' : '全部测试'}
+        </button>
+        <button
+          type="button"
+          disabled={busy || !settings || relayList.length === 0 || !relayDirty}
+          onclick={() =>
+            void run(async () => {
+              if (!settings) return;
+              await saveNostrSettingsApi({
+                ...settings,
+                relays: relayList,
+              });
+            })}
+        >
+          保存
+        </button>
+      </div>
     {/if}
   </section>
 
@@ -730,6 +795,19 @@
     color: var(--sc-ink, #18191c);
   }
 
+  h3 {
+    margin: 2px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--sc-muted, #61666d);
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .card-toggle {
     display: flex;
     align-items: center;
@@ -898,8 +976,7 @@
   }
 
   input[type='text'],
-  input[type='password'],
-  textarea {
+  input[type='password'] {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--sc-line, #e3e5e7);
@@ -911,18 +988,103 @@
     background: #fff;
   }
 
-  textarea {
-    resize: vertical;
-    min-height: 72px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-
-  .check {
+  .nostr-heading {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    font-size: 12px;
+  }
+
+  .relay-rule {
+    color: var(--sc-faint, #9499a0);
+    font-size: 11px;
+    font-weight: 400;
+    text-align: right;
+  }
+
+  .relay-test {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .relay-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .relay-list li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  input.relay-url {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
     color: var(--sc-muted, #61666d);
+  }
+
+  .relay-state {
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+
+  .relay-state.testing {
+    color: var(--sc-faint, #9499a0);
+  }
+
+  .relay-state.ok {
+    color: #2a7a3b;
+  }
+
+  .relay-state.fail {
+    color: #c4564e;
+  }
+
+  .remove-relay {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sc-faint, #9499a0);
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  .remove-relay:hover {
+    background: #fff0f0;
+    color: #c4564e;
+  }
+
+  .relay-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .save-state {
+    color: #c47a2c;
+    font-size: 11px;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .relay-actions button:last-child {
+    margin-left: auto;
   }
 
   .pref-row {
@@ -1089,10 +1251,13 @@
     min-width: 0;
   }
 
-  .save-sm {
+  .identity-actions {
+    flex-wrap: nowrap;
+  }
+
+  .identity-save {
     flex-shrink: 0;
-    padding: 7px 10px;
-    font-size: 12px;
+    margin-left: auto;
   }
 
   .pack-list {

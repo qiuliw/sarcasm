@@ -33,9 +33,6 @@ export async function publishCommentToNostr(
   if (!settings.nsec) {
     return { ok: false, error: '未配置 Nostr 密钥', accepted: 0 };
   }
-  if (!settings.publishEnabled) {
-    return { ok: true, accepted: 0 };
-  }
   if (!settings.relays.length) {
     return { ok: false, error: '未配置 relay', accepted: 0 };
   }

@@ -5,6 +5,8 @@ import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
 import { applyVote } from '../src/lib/db/vote';
 import { createSecretKey, pubkeyToNpub, secretToPubkey, shortNpub } from '../src/lib/nostr/keys';
+import { DEFAULT_RELAYS } from '../src/lib/nostr/settings';
+import { probeRelay } from '../src/lib/nostr/probe';
 import { isMeaningfulDraft, videoDraftKey } from '../src/lib/prefs/draft';
 
 function comment(partial: Partial<CommentRecord> & Pick<CommentRecord, 'id' | 'body'>): CommentRecord {
@@ -98,6 +100,22 @@ describe('nostr keys', () => {
     const npub = pubkeyToNpub(secretToPubkey(sk));
     expect(npub.startsWith('npub1')).toBe(true);
     expect(shortNpub(npub).includes('…')).toBe(true);
+  });
+});
+
+describe('nostr defaults', () => {
+  test('uses multiple live relay defaults', () => {
+    expect(DEFAULT_RELAYS.length).toBeGreaterThanOrEqual(5);
+    expect(DEFAULT_RELAYS).toContain('wss://relay.primal.net');
+    expect(DEFAULT_RELAYS).not.toContain('wss://relay.nostr.band');
+  });
+});
+
+describe('nostr relay probe', () => {
+  test('rejects non-wss relay addresses without opening a socket', async () => {
+    const result = await probeRelay('https://relay.example.com');
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('仅支持 wss://');
   });
 });
 

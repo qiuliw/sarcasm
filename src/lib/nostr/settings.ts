@@ -12,6 +12,14 @@ const SETTINGS_KEY = 'sarcasm_nostr_settings_v1';
 export const DEFAULT_RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://relay.snort.social',
+  'wss://nostr.mom',
+];
+
+const LEGACY_DEFAULT_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
   'wss://relay.nostr.band',
 ];
 
@@ -20,9 +28,6 @@ export interface NostrSettings {
   nsec: string | null;
   displayName: string;
   relays: string[];
-  publishEnabled: boolean;
-  /** 同步走后台队列，不阻塞发评 */
-  asyncPublish: boolean;
 }
 
 export interface NostrIdentity {
@@ -32,8 +37,6 @@ export interface NostrIdentity {
   /** 发评作者：显示名，缺省为「我」 */
   shortLabel: string;
   displayName: string;
-  publishEnabled: boolean;
-  asyncPublish: boolean;
   relays: string[];
 }
 
@@ -46,6 +49,13 @@ function normalizeRelays(raw: unknown): string[] {
   return list.length ? [...new Set(list)] : [...DEFAULT_RELAYS];
 }
 
+function isLegacyDefaultRelays(relays: string[]): boolean {
+  return (
+    relays.length === LEGACY_DEFAULT_RELAYS.length &&
+    LEGACY_DEFAULT_RELAYS.every((relay) => relays.includes(relay))
+  );
+}
+
 function normalizeName(name: string): string {
   return name.trim().slice(0, 32);
 }
@@ -55,8 +65,6 @@ export function defaultNostrSettings(): NostrSettings {
     nsec: null,
     displayName: '',
     relays: [...DEFAULT_RELAYS],
-    publishEnabled: true,
-    asyncPublish: true,
   };
 }
 
@@ -66,6 +74,7 @@ export async function loadNostrSettings(): Promise<NostrSettings> {
   if (!raw || typeof raw !== 'object') return defaultNostrSettings();
   const nsec =
     typeof raw.nsec === 'string' && tryParseNsec(raw.nsec) ? raw.nsec.trim() : null;
+  const relays = normalizeRelays(raw.relays);
   return {
     nsec,
     // 无密钥时不保留显示名，避免「孤儿昵称」
@@ -74,9 +83,7 @@ export async function loadNostrSettings(): Promise<NostrSettings> {
         ? normalizeName(raw.displayName)
         : ''
       : '',
-    relays: normalizeRelays(raw.relays),
-    publishEnabled: raw.publishEnabled !== false,
-    asyncPublish: raw.asyncPublish !== false,
+    relays: isLegacyDefaultRelays(relays) ? [...DEFAULT_RELAYS] : relays,
   };
 }
 
@@ -86,8 +93,6 @@ export async function saveNostrSettings(next: NostrSettings): Promise<NostrSetti
     nsec,
     displayName: nsec ? normalizeName(next.displayName) : '',
     relays: normalizeRelays(next.relays),
-    publishEnabled: Boolean(next.publishEnabled),
-    asyncPublish: next.asyncPublish !== false,
   };
   await browser.storage.local.set({ [SETTINGS_KEY]: settings });
   return settings;
@@ -149,8 +154,6 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       pubkey: null,
       shortLabel: '未配置',
       displayName: '',
-      publishEnabled: settings.publishEnabled,
-      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   }
@@ -165,8 +168,6 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       pubkey,
       shortLabel: displayName || '我',
       displayName,
-      publishEnabled: settings.publishEnabled,
-      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   } catch {
@@ -176,8 +177,6 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       pubkey: null,
       shortLabel: '密钥无效',
       displayName: '',
-      publishEnabled: settings.publishEnabled,
-      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   }

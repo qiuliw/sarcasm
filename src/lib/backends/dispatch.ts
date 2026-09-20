@@ -29,17 +29,11 @@ export function availableBackends() {
 }
 
 export async function loadEnabledBackends(): Promise<BackendId[]> {
-  const stored = await browser.storage.local.get(BACKENDS_KEY);
-  const raw = stored[BACKENDS_KEY];
-  if (!Array.isArray(raw)) return ['nostr'];
-  const allowed = new Set(BACKEND_META.map((b) => b.id));
-  const list = raw.filter((id): id is BackendId => allowed.has(id as BackendId));
-  return list.length ? list : [];
+  return ['nostr'];
 }
 
-export async function saveEnabledBackends(ids: BackendId[]): Promise<BackendId[]> {
-  const ready = new Set(BACKEND_META.filter((b) => b.ready).map((b) => b.id));
-  const next = [...new Set(ids.filter((id) => ready.has(id)))];
+export async function saveEnabledBackends(_ids: BackendId[]): Promise<BackendId[]> {
+  const next: BackendId[] = ['nostr'];
   await browser.storage.local.set({ [BACKENDS_KEY]: next });
   return next;
 }

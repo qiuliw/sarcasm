@@ -8,6 +8,7 @@ import type {
   VoteKind,
 } from '../db/types';
 import type { NostrIdentity, NostrSettings } from '../nostr/settings';
+import type { RelayProbeResult } from '../nostr/probe';
 import type { BackendId } from '../backends/dispatch';
 import type { OutboxTrashItem } from '../backends/outbox';
 
@@ -28,6 +29,7 @@ export type BgRequest =
   | { type: 'nostr_get_settings' }
   | { type: 'nostr_save_settings'; settings: NostrSettings }
   | { type: 'nostr_save_display_name'; displayName: string }
+  | { type: 'nostr_probe_relays'; urls: string[] }
   | { type: 'nostr_generate_key' }
   | { type: 'nostr_import_key'; nsec: string }
   | { type: 'nostr_export_key' }
@@ -114,6 +116,10 @@ export function saveNostrSettingsApi(settings: NostrSettings): Promise<NostrSett
 
 export function saveDisplayNameApi(displayName: string): Promise<NostrSettings> {
   return sendBg({ type: 'nostr_save_display_name', displayName });
+}
+
+export function probeNostrRelaysApi(urls: string[]): Promise<RelayProbeResult[]> {
+  return sendBg({ type: 'nostr_probe_relays', urls });
 }
 
 export function generateNostrKeyApi(): Promise<NostrSettings> {

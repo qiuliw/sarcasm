@@ -64,7 +64,7 @@
   </ol>
 
   <footer>
-    {#if identity?.publishEnabled && identity.configured}
+    {#if identity?.configured}
       发评会同步到 Nostr relay
     {:else}
       评论先保存在本机

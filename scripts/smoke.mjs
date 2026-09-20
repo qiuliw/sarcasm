@@ -44,6 +44,13 @@ async function runCrud(page) {
   const ping = await send(page, { type: 'ping' });
   assert(ping?.ok, `ping failed: ${JSON.stringify(ping)}`);
 
+  const relayProbe = await send(page, {
+    type: 'nostr_probe_relays',
+    urls: ['https://invalid-relay.example'],
+  });
+  assert(relayProbe?.ok, `relay probe request failed: ${JSON.stringify(relayProbe)}`);
+  assert(relayProbe.data?.[0]?.error === '仅支持 wss://', 'relay probe validation failed');
+
   const key = await send(page, { type: 'nostr_generate_key' });
   assert(key?.ok, `generate key failed: ${JSON.stringify(key)}`);
   assert(key.data?.nsec, '未生成 nsec');
@@ -197,6 +204,30 @@ async function runContentScriptOnBilibili(browser, extensionId) {
 
   await page.screenshot({
     path: path.join(root, '.output', 'smoke-bilibili-panel.png'),
+    fullPage: false,
+  });
+  await page.evaluate(() => {
+    const root = document.querySelector('sarcasm-root')?.shadowRoot;
+    const settings = root?.querySelector('button[aria-label="设置"]');
+    if (settings instanceof HTMLElement) settings.click();
+  });
+  await page.waitForFunction(
+    () => (document.querySelector('sarcasm-root')?.shadowRoot?.textContent || '').includes('Nostr'),
+    { timeout: 10_000 },
+  );
+  await page.evaluate(() => {
+    const root = document.querySelector('sarcasm-root')?.shadowRoot;
+    const sync = [...(root?.querySelectorAll('button.card-toggle') || [])].find((button) =>
+      (button.textContent || '').includes('同步'),
+    );
+    if (sync instanceof HTMLElement) sync.click();
+  });
+  await page.waitForFunction(
+    () => !!document.querySelector('sarcasm-root')?.shadowRoot?.querySelector('input.relay-url'),
+    { timeout: 10_000 },
+  );
+  await page.screenshot({
+    path: path.join(root, '.output', 'smoke-settings.png'),
     fullPage: false,
   });
   await page.close();

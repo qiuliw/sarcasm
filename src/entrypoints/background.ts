@@ -9,7 +9,6 @@ import {
   voteComment,
 } from '../lib/db/sqlite';
 import type { BgRequest, BgResponse } from '../lib/messaging/api';
-import { publishOutbound } from '../lib/backends/dispatch';
 import {
   loadEnabledBackends,
   saveEnabledBackends,
@@ -97,22 +96,10 @@ async function handle(message: BgRequest): Promise<BgResponse> {
         pageUrl: message.input.pageUrl,
       };
 
-      const settings = await loadNostrSettings();
-      if (settings.asyncPublish) {
-        await enqueueOutbound(payload);
-        void flushOutbox().catch((err) => {
-          console.warn('[sarcasm] outbox flush failed', err);
-        });
-      } else {
-        const results = await publishOutbound(payload);
-        for (const r of results) {
-          if (!r.ok) console.warn(`[sarcasm] backend ${r.id} failed`, r.error);
-          else if (r.eventId) {
-            const { remapCommentId } = await import('../lib/db/sqlite');
-            await remapCommentId(record.id, r.eventId);
-          }
-        }
-      }
+      await enqueueOutbound(payload);
+      void flushOutbox().catch((err) => {
+        console.warn('[sarcasm] outbox flush failed', err);
+      });
 
       return { ok: true, data: record };
     }
@@ -148,6 +135,10 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await saveNostrSettings(message.settings) };
     case 'nostr_save_display_name':
       return { ok: true, data: await saveDisplayName(message.displayName) };
+    case 'nostr_probe_relays': {
+      const { probeRelays } = await import('../lib/nostr/probe');
+      return { ok: true, data: await probeRelays(message.urls) };
+    }
     case 'nostr_generate_key':
       return { ok: true, data: await generateNostrKey() };
     case 'nostr_import_key':
