@@ -1,92 +1,65 @@
 # sarcasm
 
-用 **Svelte + WXT（Manifest V3）** 做的浏览器插件：在抖音、B 站视频页注入独立评论侧栏，按 **视频 ID** 挂载外挂评论。数据先落在扩展内的 **SQLite（sql.js）**，方便以后换成自建后端。
+Browser extension for independent comments on Bilibili / Douyin video pages.
 
-## 和现有项目的区别
+Built with **WXT (MV3) + Svelte 5 + sql.js**. Comments are keyed by video ID, stored locally, and can sync to Nostr relays in the background.
 
-搜过一圈，**没有同款「独立外挂评论层 + 双平台视频锚点 + SQLite」**：
+## Features
 
-| 项目 | 做什么 | 和本插件差异 |
-| --- | --- | --- |
-| [comment_copilot](https://github.com/mustcanbedo/comment_copilot) | 采集原生评论、AI 拟回复并填回站内输入框 | 仍走平台原生评论，不是独立评论区 |
-| [Kindly-Web](https://github.com/ClauBloom/Kindly-Web) | 改写 B 站负面评论 | 改写已有评论，不新建评论层 |
-| [bilibili-comment-capture](https://github.com/Liu-Bot24/bilibili-comment-capture) | 抓取/导出 B 站评论 | 只读导出 |
-| [douyin-helper](https://github.com/iamaluckyguy/douyin-helper) | 保持抖音原生评论区展开等 | 增强原生 UI，无独立存储评论 |
+- Floating comment panel on Bilibili / Douyin video pages
+- JSON **anchor packs** (built-in + import/export) for video ID detection
+- Nostr identity (`nsec`) with display name
+- Local SQLite via sql.js; optional async Nostr publish with retry + trash for permanent failures
+- In-panel settings (identity / sync / anchors / reset)
 
-因此本仓库是从零实现的 MVP。
+## Install (development)
 
-## 功能
-
-- 视频锚点：可导入导出的 JSON 规则包（内置 B 站 / 抖音，可覆盖同 id）
-- 回复视频 / 外挂评论（两级楼）
-- 点赞 / 点踩
-- **Nostr 密钥身份**（面板内设置：生成或导入 nsec）
-- 事件源开关：本地 SQLite 必写，额外可同步 Nostr（P2P 预留）
-- 本地 SQLite 存储 + 按视频草稿
-- 面板内置设置：身份 / 事件源 / 锚点规则导入导出
-
-## 开发
-
-环境要求：已安装 [Bun](https://bun.sh/) 和 Chrome/Chromium。
+Requires [Bun](https://bun.sh/) and Chrome/Chromium.
 
 ```bash
-cd sarcasm
 bun install
 bun run dev
 ```
 
-`bun run dev` 会启动 WXT 开发服务器，生成开发版扩展到
-`.output/chrome-mv3-dev`，并尝试打开一个已安装该扩展的独立浏览器窗口。
-保持该命令运行，修改 `src/` 下的代码后即可触发热更新。
-
-如果浏览器没有自动打开，首次使用时手动加载：
-
-1. 打开 Chrome 的 `chrome://extensions`。
-2. 开启右上角「开发者模式」。
-3. 点击「加载已解压的扩展程序」。
-4. 选择项目中的 `.output/chrome-mv3-dev` 目录。
-5. 打开或刷新一个 B 站/抖音视频页进行调试。
-
-热更新说明：
-
-- popup 和 Svelte 组件更新后会自动刷新。
-- content script 与 background service worker 更新后，WXT 会自动重载扩展。
-- 已经打开的视频页若没有显示最新 content script，手动刷新该网页。
-- 修改 `wxt.config.ts`、manifest 配置或依赖后，建议停止开发服务器并重新执行
-  `bun run dev`。
-- 按 `Ctrl+C` 停止开发服务器。
-
-生产构建与测试：
+Load `.output/chrome-mv3-dev` at `chrome://extensions` (Developer mode → Load unpacked) if the browser does not open automatically.
 
 ```bash
-bun run build   # 产物在 .output/chrome-mv3
-bun run zip     # .output/sarcasm-0.1.0-chrome.zip
-bun run test    # 单元测试 + Chrome 冒烟（SQLite CRUD + B站注入）
+bun run build   # .output/chrome-mv3
+bun run zip     # packaged zip
+bun run test:unit
+bun run test    # unit + Chrome smoke
 ```
 
-## 已验证
+## Privacy
 
-- MV3 CSP 含 `'wasm-unsafe-eval'`，service worker 内 sql.js WASM 可实例化
-- popup → background：CRUD / 点赞点踩 / 楼中楼 / 级联删除 / stats
-- B 站视频页注入 `<sarcasm-root>` 并识别 `videoId`
+- Comments and drafts stay in `chrome.storage.local` on your device
+- Private keys (`nsec`) never leave the machine except when you enable Nostr publish
+- Resetting config clears identity / sync / custom anchors / drafts; it does **not** delete local comments
 
-## 数据模型（便于以后接后端）
+## Architecture (short)
+
+| Layer | Role |
+| --- | --- |
+| Content UI | Shadow-root overlay panel |
+| Background | SQLite CRUD, outbox flush, messaging |
+| Anchors | Declarative host/path rules → `platform` + `videoId` |
+| Backends | Local always; Nostr via queued publish |
 
 ```sql
 comments(
   id, platform, video_id,
-  parent_id,          -- 外挂楼中楼
-  reply_to_author,
+  parent_id, reply_to_author,
   author, body,
   likes, dislikes, my_vote,
   created_at, updated_at
 )
 ```
 
-持久化：`sql.js` 导出二进制 → `chrome.storage.local`。后端上线后只需把 CRUD 从 background 消息改成 HTTP，锚点字段可原样迁移。
+## Notes
 
-## 注意
+- `extension-key.b64` / `extension-id.txt` pin a stable extension ID for smoke tests
+- Site layout changes are usually fixed by updating anchor JSON, not code
 
-- 视频 ID 来自 URL/规则包，相对稳；站点改版时改 JSON 规则即可，不必改代码。
-- 设置在视频页悬浮面板内（齿轮）；扩展 options 页复用同一套 UI。
-- 仅本机存储，清扩展数据会丢评论；多设备同步走 Nostr 或以后的服务器。
+## License
+
+MIT

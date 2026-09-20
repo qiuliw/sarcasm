@@ -1,9 +1,20 @@
 {
   "name": "sarcasm",
-  "description": "sarcasm — 抖音 / B站外挂评论区浏览器插件（Svelte + SQLite）",
-  "private": true,
+  "description": "Independent overlay comments for Bilibili / Douyin, with local SQLite and optional Nostr sync",
+  "private": false,
   "version": "0.1.0",
   "type": "module",
+  "license": "MIT",
+  "author": "qiuliw",
+  "keywords": [
+    "browser-extension",
+    "wxt",
+    "svelte",
+    "bilibili",
+    "douyin",
+    "nostr",
+    "sqlite"
+  ],
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",

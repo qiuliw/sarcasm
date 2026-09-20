@@ -1,6 +1,6 @@
 /** 出站事件源：本地永远写库；这里只管额外同步 */
 
-export type BackendId = 'nostr' | 'p2p';
+export type BackendId = 'nostr';
 
 export interface OutboundComment {
   platform: string;
@@ -20,12 +20,12 @@ const BACKENDS_KEY = 'sarcasm_event_backends_v1';
 
 export const BACKEND_META: Array<{ id: BackendId; name: string; ready: boolean }> = [
   { id: 'nostr', name: 'Nostr', ready: true },
-  { id: 'p2p', name: 'P2P', ready: false },
 ];
 
 export function availableBackends() {
   return BACKEND_META.filter((b) => b.ready);
 }
+
 export async function loadEnabledBackends(): Promise<BackendId[]> {
   const stored = await browser.storage.local.get(BACKENDS_KEY);
   const raw = stored[BACKENDS_KEY];
@@ -61,10 +61,6 @@ export async function publishOutbound(event: OutboundComment): Promise<BackendRe
         ok: published.ok,
         error: published.error,
       });
-      continue;
-    }
-    if (id === 'p2p') {
-      results.push({ id, ok: false, error: 'unavailable' });
     }
   }
 

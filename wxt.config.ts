@@ -16,7 +16,7 @@ export default defineConfig({
       default_title: 'sarcasm',
     },
     name: 'sarcasm',
-    description: '抖音 / B站外挂评论：Nostr 身份，本地存储并可同步到 relay',
+    description: 'Independent comments for Bilibili / Douyin with optional Nostr sync',
     permissions: ['storage', 'alarms'],
     host_permissions: [
       '*://*.bilibili.com/*',
