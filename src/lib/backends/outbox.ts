@@ -2,7 +2,7 @@
 
 import { publishOutbound, type OutboundComment } from './dispatch';
 
-const OUTBOX_KEY = 'sarcasm_outbox_v1';
+export const OUTBOX_KEY = 'sarcasm_outbox_v1';
 const ALARM_NAME = 'sarcasm_outbox_flush';
 const MAX_ATTEMPTS = 8;
 

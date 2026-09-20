@@ -3,7 +3,7 @@
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
   import SettingsView from './SettingsView.svelte';
-  import { createComment, deleteComment, listComments, voteComment } from '../lib/messaging/api';
+  import { createComment, deleteComment, getOutboxPending, listComments, voteComment } from '../lib/messaging/api';
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
   import type {
     CommentRecord,
@@ -18,6 +18,7 @@
     observeHref,
     resolvePageContextSync,
   } from '../lib/anchors/store';
+  import { OUTBOX_KEY } from '../lib/backends/outbox';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
   import { loadNostrIdentity, type NostrIdentity } from '../lib/nostr/settings';
 
@@ -34,6 +35,7 @@
   let packs = $state<AnchorPack[]>([]);
   let expandedRoots = $state<Record<string, true>>({});
   let view = $state<'feed' | 'settings'>('feed');
+  let outboxPending = $state(0);
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
@@ -180,6 +182,7 @@
     await clearDraft(context.platform, context.videoId);
     await reloadComments();
     await flashAndScroll(created.id);
+    void refreshOutbox();
   }
 
   function expandRoot(rootId: string) {
@@ -223,16 +226,27 @@
     packs = await loadAllPacks();
   }
 
+  async function refreshOutbox() {
+    try {
+      const { count } = await getOutboxPending();
+      outboxPending = count;
+    } catch {
+      // ignore
+    }
+  }
+
   onMount(() => {
     void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
     });
     void refreshIdentity();
+    void refreshOutbox();
     void refreshPacks().then(() => refreshContext());
     window.addEventListener('keydown', handleKeydown);
     const onStorage = (changes: Record<string, unknown>, area: string) => {
       if (area !== 'local') return;
       void refreshIdentity();
+      if (OUTBOX_KEY in changes) void refreshOutbox();
       if ('sarcasm_anchor_packs_v1' in changes) {
         void refreshPacks().then(() => refreshContext());
       }
@@ -270,6 +284,9 @@
           d="M5 5.75A2.75 2.75 0 0 1 7.75 3h8.5A2.75 2.75 0 0 1 19 5.75v6.5A2.75 2.75 0 0 1 16.25 15H11l-4.35 3.48A1 1 0 0 1 5 17.7V15.1a2.75 2.75 0 0 1-2-2.65v-6.7Z"
         />
       </svg>
+      {#if outboxPending > 0}
+        <span class="fab-dot" title={`待同步 ${outboxPending}`} aria-label={`待同步 ${outboxPending}`}></span>
+      {/if}
       {#if commentCount > 0}
         <span class="fab-count">{commentCount > 99 ? '99+' : commentCount}</span>
       {/if}
@@ -305,7 +322,7 @@
             class="icon-button"
             class:active={inSettings}
             onclick={toggleSettings}
-            title={inSettings ? '返回评论' : '设置'}
+            title={inSettings ? '返回评论' : outboxPending > 0 ? `设置（待同步 ${outboxPending}）` : '设置'}
             aria-label={inSettings ? '返回评论' : '设置'}
           >
             {#if inSettings}
@@ -321,6 +338,9 @@
                   d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3h-4l-.4 2.5a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.7 7.7 0 0 0 1.7 1L11 21h4l.4-2.5a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"
                 />
               </svg>
+            {/if}
+            {#if !inSettings && outboxPending > 0}
+              <span class="gear-dot" aria-hidden="true"></span>
             {/if}
           </button>
           {#if !inSettings}
@@ -358,8 +378,10 @@
         <div class="scroll settings-scroll">
           <SettingsView
             compact
+            outboxPending={outboxPending}
             onSaved={() => {
               void refreshIdentity();
+              void refreshOutbox();
               void refreshPacks().then(() => refreshContext());
             }}
           />
@@ -489,6 +511,29 @@
     font-weight: 700;
   }
 
+  .fab-dot {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e6a23c;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgb(230 162 60 / 35%);
+  }
+
+  .gear-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e6a23c;
+    border: 1.5px solid #fff;
+  }
+
   .panel {
     position: fixed;
     right: 24px;
@@ -582,6 +627,7 @@
   }
 
   .icon-button {
+    position: relative;
     width: 32px;
     height: 32px;
     display: grid;

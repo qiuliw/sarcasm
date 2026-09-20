@@ -64,8 +64,15 @@ export async function publishCommentToNostr(
         pool.publish(settings.relays, event),
       );
       const accepted = results.filter((r) => r.status === 'fulfilled').length;
-      if (accepted === 0) {
-        return { ok: false, error: '所有 relay 均未接受', eventId: event.id, accepted: 0 };
+      // 配 1 个 relay → 要 1 个；配多个 → 至少 2 个接受算成功（gossip 更稳）
+      const need = Math.min(2, settings.relays.length);
+      if (accepted < need) {
+        return {
+          ok: false,
+          error: `仅 ${accepted}/${settings.relays.length} 个 relay 接受（需 ≥${need}）`,
+          eventId: event.id,
+          accepted,
+        };
       }
       return { ok: true, eventId: event.id, accepted };
     } finally {

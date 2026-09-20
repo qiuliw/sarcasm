@@ -25,10 +25,11 @@
 
   interface Props {
     compact?: boolean;
+    outboxPending?: number;
     onSaved?: () => void;
   }
 
-  let { compact = false, onSaved }: Props = $props();
+  let { compact = false, outboxPending = 0, onSaved }: Props = $props();
 
   let settings = $state<NostrSettings | null>(null);
   let nsecInput = $state('');
@@ -291,6 +292,9 @@
 
   <section class="card">
     <h2>同步</h2>
+    {#if outboxPending > 0}
+      <p class="pending">待同步 {outboxPending}</p>
+    {/if}
     {#each backends as backend (backend.id)}
       <label class="check">
         <input
@@ -307,6 +311,7 @@
         <span>Relay</span>
         <textarea rows={compact ? 3 : 4} bind:value={relayText}></textarea>
       </label>
+      <p class="hint">配 1 个需成功 1 个；配多个至少成功 2 个。</p>
       <label class="check">
         <input
           type="checkbox"
@@ -473,6 +478,13 @@
     margin: 0;
     font-size: 12px;
     color: var(--sc-faint, #9499a0);
+  }
+
+  .pending {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e6a23c;
   }
 
   .field {
