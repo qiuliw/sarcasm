@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
   import { createComment, deleteComment, listComments } from '../lib/messaging/api';
@@ -13,6 +13,9 @@
   let replyTarget = $state<ReplyTarget | null>({ kind: 'video' });
   let loading = $state(false);
   let status = $state('');
+  let highlightId = $state<string | null>(null);
+  let nativePreviews = $state<Record<string, string>>({});
+  let scrollEl = $state<HTMLDivElement | null>(null);
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
@@ -25,21 +28,37 @@
 
   let stopNav: (() => void) | null = null;
   let scanTimer: number | undefined;
+  let highlightTimer: number | undefined;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
+  const NATIVE_PREVIEW_KEY = 'sarcasm_native_previews';
 
   async function setOpen(value: boolean) {
     open = value;
     await browser.storage.local.set({ [UI_OPEN_KEY]: value });
   }
 
+  function clearReplyTarget() {
+    replyTarget = { kind: 'video' };
+  }
+
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && open) {
-      void setOpen(false);
+    if (event.key !== 'Escape' || !open) return;
+    if (replyTarget && replyTarget.kind !== 'video') {
+      clearReplyTarget();
+      return;
     }
+    void setOpen(false);
   }
 
   async function refreshContext() {
-    context = readPageContext();
+    const next = readPageContext();
+    const switched =
+      context?.platform !== next?.platform || context?.videoId !== next?.videoId;
+    context = next;
+    if (switched) {
+      clearReplyTarget();
+      highlightId = null;
+    }
     if (!context) {
       rows = [];
       status = '当前页未识别到视频';
@@ -64,11 +83,22 @@
     }
   }
 
+  async function flashAndScroll(id: string) {
+    highlightId = id;
+    if (highlightTimer) window.clearTimeout(highlightTimer);
+    highlightTimer = window.setTimeout(() => {
+      highlightId = null;
+    }, 1600);
+    await tick();
+    const el = scrollEl?.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
   async function handleSubmit(body: string) {
     if (!context) throw new Error('没有视频上下文');
     const target = replyTarget ?? { kind: 'video' as const };
 
-    await createComment({
+    const created = await createComment({
       platform: context.platform,
       videoId: context.videoId,
       body,
@@ -78,8 +108,9 @@
       replyToAuthor: target.kind === 'overlay_comment' ? target.replyToAuthor ?? null : null,
     });
 
-    replyTarget = { kind: 'video' };
+    clearReplyTarget();
     await reloadComments();
+    await flashAndScroll(created.id);
   }
 
   function replyOverlay(node: CommentTreeNode) {
@@ -88,7 +119,7 @@
       kind: 'overlay_comment',
       targetId: node.id,
       threadRootId: resolved.threadRootId,
-      replyToAuthor: resolved.replyToAuthor,
+      replyToAuthor: resolved.replyToAuthor ?? undefined,
       preview: node.body.slice(0, 80),
     };
   }
@@ -98,12 +129,25 @@
     await reloadComments();
   }
 
+  async function rememberNativePreview(id: string, preview: string) {
+    const next = { ...nativePreviews, [id]: preview.slice(0, 60) };
+    nativePreviews = next;
+    await browser.storage.local.set({ [NATIVE_PREVIEW_KEY]: next });
+  }
+
+  function nativeSectionTitle(nativeId: string): string {
+    const preview = nativePreviews[nativeId]?.trim();
+    if (preview) return preview;
+    return '原评论';
+  }
+
   function anchorNative(id: string, preview: string) {
     replyTarget = {
       kind: 'native_comment',
       targetId: id,
       preview,
     };
+    void rememberNativePreview(id, preview);
     void setOpen(true);
   }
 
@@ -116,6 +160,7 @@
       btn.type = 'button';
       btn.className = 'sc-anchor-btn';
       btn.textContent = '外评';
+      btn.title = '用外挂评论回复这条';
       btn.style.cssText =
         'margin-left:8px;font-size:12px;font-weight:500;border:0;background:transparent;color:#FB7299;padding:0 4px;cursor:pointer;';
       btn.addEventListener('click', (e) => {
@@ -128,8 +173,12 @@
   }
 
   onMount(() => {
-    void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
+    void browser.storage.local.get([UI_OPEN_KEY, NATIVE_PREVIEW_KEY]).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
+      const previews = stored[NATIVE_PREVIEW_KEY];
+      if (previews && typeof previews === 'object') {
+        nativePreviews = previews as Record<string, string>;
+      }
     });
     void refreshContext();
     window.addEventListener('keydown', handleKeydown);
@@ -147,6 +196,7 @@
   onDestroy(() => {
     stopNav?.();
     if (scanTimer) window.clearInterval(scanTimer);
+    if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
 </script>
@@ -222,23 +272,28 @@
         <p class="status">{status}</p>
       {/if}
 
-      <div class="scroll" class:scroll-empty={!hasComments}>
+      <div class="scroll" class:scroll-empty={!hasComments} bind:this={scrollEl}>
         {#if loading}
           <p class="empty">加载中…</p>
         {:else if !context}
-          <p class="empty">请打开具体视频页后再试</p>
+          <p class="empty">打开具体视频页后再说</p>
         {:else if !hasComments}
           <p class="empty">还没有评论，来说两句吧</p>
         {:else}
           {#if forest.videoRoots.length}
             <section class="section">
               <h3>
-                <span>视频回复</span>
+                <span>视频下</span>
                 <span class="sec-count">{forest.videoRoots.length}</span>
               </h3>
               <div class="list">
                 {#each forest.videoRoots as node (node.id)}
-                  <CommentItem {node} onReply={replyOverlay} onDelete={handleDelete} />
+                  <CommentItem
+                    {node}
+                    {highlightId}
+                    onReply={replyOverlay}
+                    onDelete={handleDelete}
+                  />
                 {/each}
               </div>
             </section>
@@ -246,13 +301,18 @@
 
           {#each Object.entries(forest.byNativeParent) as [nativeId, nodes] (nativeId)}
             <section class="section">
-              <h3>
-                <span>锚定原生</span>
-                <code title={nativeId}>{nativeId}</code>
+              <h3 title={nativeId}>
+                <span>原评</span>
+                <span class="native-preview">{nativeSectionTitle(nativeId)}</span>
               </h3>
               <div class="list">
                 {#each nodes as node (node.id)}
-                  <CommentItem {node} onReply={replyOverlay} onDelete={handleDelete} />
+                  <CommentItem
+                    {node}
+                    {highlightId}
+                    onReply={replyOverlay}
+                    onDelete={handleDelete}
+                  />
                 {/each}
               </div>
             </section>
@@ -263,8 +323,9 @@
       <Composer
         target={replyTarget}
         disabled={!context}
+        autofocus={open}
         onSubmit={handleSubmit}
-        onClearTarget={() => (replyTarget = { kind: 'video' })}
+        onClearTarget={clearReplyTarget}
       />
     </aside>
   {/if}
@@ -521,13 +582,14 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     font-size: 13px;
     color: var(--sc-muted);
     font-weight: 500;
   }
 
-  h3 code {
-    max-width: 12rem;
+  .native-preview {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

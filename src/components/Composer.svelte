@@ -4,27 +4,46 @@
   interface Props {
     target: ReplyTarget | null;
     disabled?: boolean;
+    autofocus?: boolean;
     onSubmit: (body: string) => Promise<void> | void;
     onClearTarget: () => void;
   }
 
-  let { target, disabled = false, onSubmit, onClearTarget }: Props = $props();
+  let {
+    target,
+    disabled = false,
+    autofocus = false,
+    onSubmit,
+    onClearTarget,
+  }: Props = $props();
+
   let body = $state('');
   let busy = $state(false);
   let error = $state('');
+  let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   function label(t: ReplyTarget | null): string {
-    if (!t || t.kind === 'video') return '发表评论';
-    if (t.kind === 'native_comment') return '锚定原生评论';
+    if (!t || t.kind === 'video') return '发条评论';
+    if (t.kind === 'native_comment') return '回复原评论';
     if (t.replyToAuthor) return `回复 @${t.replyToAuthor}`;
     return '回复评论';
   }
 
-  function targetHint(t: ReplyTarget | null): string {
-    if (!t || t.kind === 'video') return '';
-    if (t.kind === 'native_comment') return t.targetId || '';
-    return '';
-  }
+  $effect(() => {
+    // 打开面板或切换回复目标时，把光标放进输入框
+    if (autofocus && !disabled) {
+      queueMicrotask(() => textareaEl?.focus());
+    }
+  });
+
+  $effect(() => {
+    // 仅依赖 target 变化以触发聚焦
+    void target?.kind;
+    void target?.targetId;
+    if (!disabled && target && target.kind !== 'video') {
+      queueMicrotask(() => textareaEl?.focus());
+    }
+  });
 
   async function submit() {
     if (!body.trim() || busy || disabled) return;
@@ -33,6 +52,7 @@
     try {
       await onSubmit(body.trim());
       body = '';
+      queueMicrotask(() => textareaEl?.focus());
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -53,9 +73,6 @@
     <div class="target">
       <div class="target-main">
         <span class="badge">{label(target)}</span>
-        {#if targetHint(target)}
-          <code>{targetHint(target)}</code>
-        {/if}
       </div>
       <button type="button" class="clear" onclick={onClearTarget}>取消</button>
     </div>
@@ -66,8 +83,9 @@
 
   <div class="box">
     <textarea
+      bind:this={textareaEl}
       rows="2"
-      placeholder={disabled ? '未识别到视频' : `${label(target)}…`}
+      placeholder={disabled ? '打开视频页后再评论' : `${label(target)}…`}
       bind:value={body}
       {disabled}
       onkeydown={onKeydown}
@@ -120,15 +138,6 @@
     color: var(--sc-accent);
   }
 
-  code {
-    max-width: 10rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-    color: var(--sc-faint);
-  }
-
   .clear {
     border: 0;
     background: transparent;
@@ -148,6 +157,10 @@
     font-size: 12px;
     color: var(--sc-faint);
     line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   .box {

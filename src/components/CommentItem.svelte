@@ -6,39 +6,61 @@
     node: CommentTreeNode;
     /** 一级评论才展示楼中楼列表 */
     showReplies?: boolean;
+    highlightId?: string | null;
     onReply: (node: CommentTreeNode) => void;
     onDelete: (id: string) => void;
   }
 
-  let { node, showReplies = true, onReply, onDelete }: Props = $props();
+  let {
+    node,
+    showReplies = true,
+    highlightId = null,
+    onReply,
+    onDelete,
+  }: Props = $props();
 
-  function formatTime(ts: number): string {
+  let confirmDelete = $state(false);
+
+  function formatRelativeTime(ts: number): string {
+    const diff = Date.now() - ts;
+    if (diff < 15_000) return '刚刚';
+    if (diff < 60_000) return `${Math.floor(diff / 1000)} 秒前`;
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+    if (diff < 86_400_000 * 7) return `${Math.floor(diff / 86_400_000)} 天前`;
+
     const d = new Date(ts);
     const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    if (sameDay) {
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    const sameYear = d.getFullYear() === now.getFullYear();
-    if (sameYear) {
+    if (d.getFullYear() === now.getFullYear()) {
       return `${d.getMonth() + 1}-${d.getDate()}`;
     }
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   }
 
   const initial = $derived((node.author || '?').slice(0, 1).toUpperCase());
+  const highlighted = $derived(highlightId === node.id);
+
+  function requestDelete() {
+    if (!confirmDelete) {
+      confirmDelete = true;
+      return;
+    }
+    confirmDelete = false;
+    onDelete(node.id);
+  }
+
+  function cancelDelete() {
+    confirmDelete = false;
+  }
 </script>
 
-<article class="item" class:reply={!showReplies}>
+<article class="item" class:reply={!showReplies} class:flash={highlighted} data-id={node.id}>
   <div class="row">
     <div class="avatar" aria-hidden="true">{initial}</div>
     <div class="main">
       <header>
         <strong>{node.author}</strong>
-        <time datetime={new Date(node.createdAt).toISOString()}>{formatTime(node.createdAt)}</time>
+        <time datetime={new Date(node.createdAt).toISOString()}>{formatRelativeTime(node.createdAt)}</time>
       </header>
       <p class="body">
         {#if node.replyToAuthor}
@@ -48,7 +70,15 @@
       </p>
       <footer>
         <button type="button" onclick={() => onReply(node)}>回复</button>
-        <button type="button" class="danger" onclick={() => onDelete(node.id)}>删除</button>
+        {#if confirmDelete}
+          <button type="button" class="danger" onclick={requestDelete}>确认删除</button>
+          <button type="button" onclick={cancelDelete}>取消</button>
+        {:else}
+          <button type="button" class="danger" onclick={requestDelete}>删除</button>
+        {/if}
+        {#if showReplies && node.children.length > 0}
+          <span class="reply-count">{node.children.length} 条回复</span>
+        {/if}
       </footer>
     </div>
   </div>
@@ -56,7 +86,13 @@
   {#if showReplies && node.children.length}
     <div class="children">
       {#each node.children as child (child.id)}
-        <CommentItem node={child} showReplies={false} {onReply} {onDelete} />
+        <CommentItem
+          node={child}
+          showReplies={false}
+          {highlightId}
+          {onReply}
+          {onDelete}
+        />
       {/each}
     </div>
   {/if}
@@ -66,6 +102,8 @@
   .item {
     padding: 12px 0;
     border-bottom: 1px solid var(--sc-line);
+    border-radius: 6px;
+    transition: background 1.2s ease;
   }
 
   .item:last-child {
@@ -75,6 +113,10 @@
   .item.reply {
     padding: 10px 0 0;
     border-bottom: 0;
+  }
+
+  .item.flash {
+    background: var(--sc-accent-soft);
   }
 
   .row {
@@ -149,8 +191,16 @@
 
   footer {
     display: flex;
-    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
     margin-top: 2px;
+  }
+
+  .reply-count {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--sc-faint);
   }
 
   button {
