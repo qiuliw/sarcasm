@@ -12,20 +12,19 @@
     VoteKind,
   } from '../lib/db/types';
   import { readPageContext, resolveAdapter } from '../lib/platforms';
-  import { getDefaultAuthor, loadAuthor, saveAuthor } from '../lib/prefs/author';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
+  import { loadNostrIdentity, type NostrIdentity } from '../lib/nostr/settings';
 
   let open = $state(false);
   let context = $state<PageContext | null>(null);
   let rows = $state<CommentRecord[]>([]);
   let replyTarget = $state<ReplyTarget>({ kind: 'video' });
   let composerBody = $state('');
-  let composerExpanded = $state(false);
   let loading = $state(false);
   let status = $state('');
   let highlightId = $state<string | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
-  let author = $state(getDefaultAuthor());
+  let identity = $state<NostrIdentity | null>(null);
   let expandedRoots = $state<Record<string, true>>({});
 
   const forest = $derived(buildCommentForest(rows));
@@ -34,9 +33,11 @@
   const platformLabel = $derived(
     context?.platform === 'bilibili' ? 'B站' : context?.platform === 'douyin' ? '抖音' : '',
   );
+  const authorLabel = $derived(identity?.shortLabel || '未配置密钥');
 
   let stopNav: (() => void) | null = null;
   let highlightTimer: number | undefined;
+  let stopStorage: (() => void) | null = null;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
 
   async function setOpen(value: boolean) {
@@ -52,7 +53,7 @@
     await saveDraft(ctx.platform, ctx.videoId, {
       body: composerBody,
       replyTarget,
-      expanded: composerExpanded,
+      expanded: false,
     });
   }
 
@@ -61,12 +62,10 @@
     if (!draft || !isMeaningfulDraft(draft)) {
       composerBody = '';
       replyTarget = { kind: 'video' };
-      composerExpanded = false;
       return;
     }
     composerBody = draft.body;
     replyTarget = draft.replyTarget;
-    composerExpanded = draft.expanded || Boolean(draft.body.trim()) || draft.replyTarget.kind !== 'video';
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -97,7 +96,6 @@
       } else {
         composerBody = '';
         replyTarget = { kind: 'video' };
-        composerExpanded = false;
       }
     }
 
@@ -138,19 +136,22 @@
 
   async function handleSubmit(body: string) {
     if (!context) throw new Error('没有视频上下文');
+    if (!identity?.configured) {
+      throw new Error('请先在设置页配置 Nostr 密钥');
+    }
     const target = replyTarget;
 
     const created = await createComment({
       platform: context.platform,
       videoId: context.videoId,
       body,
-      author,
+      author: identity.shortLabel,
       parentId:
         target.kind === 'overlay_comment' ? target.threadRootId ?? target.targetId ?? null : null,
       replyToAuthor: target.kind === 'overlay_comment' ? target.replyToAuthor ?? null : null,
+      pageUrl: context.url,
     });
 
-    // 回复楼中楼后保持该楼展开，避免新回复被折叠藏住
     if (target.kind === 'overlay_comment') {
       const rootId = target.threadRootId ?? target.targetId;
       if (rootId) {
@@ -160,7 +161,6 @@
 
     clearReplyTarget();
     composerBody = '';
-    composerExpanded = false;
     await clearDraft(context.platform, context.videoId);
     await reloadComments();
     await flashAndScroll(created.id);
@@ -180,7 +180,6 @@
       replyToAuthor: resolved.replyToAuthor ?? undefined,
       preview: node.body.slice(0, 80),
     };
-    composerExpanded = true;
   }
 
   async function handleDelete(id: string) {
@@ -193,10 +192,6 @@
     rows = rows.map((row) => (row.id === id ? updated : row));
   }
 
-  async function handleAuthorChange(name: string) {
-    author = await saveAuthor(name);
-  }
-
   async function handleClearTarget() {
     clearReplyTarget();
     if (!composerBody.trim() && context) {
@@ -204,15 +199,22 @@
     }
   }
 
+  async function refreshIdentity() {
+    identity = await loadNostrIdentity();
+  }
+
   onMount(() => {
     void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
     });
-    void loadAuthor().then((name) => {
-      author = name;
-    });
+    void refreshIdentity();
     void refreshContext();
     window.addEventListener('keydown', handleKeydown);
+    const onStorage = () => {
+      void refreshIdentity();
+    };
+    browser.storage.onChanged.addListener(onStorage);
+    stopStorage = () => browser.storage.onChanged.removeListener(onStorage);
     const adapter = resolveAdapter();
     stopNav =
       adapter?.observeNavigation(() => {
@@ -225,6 +227,7 @@
       void persistDraftFor(context);
     }
     stopNav?.();
+    stopStorage?.();
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
@@ -252,24 +255,21 @@
   {:else}
     <aside class="panel" class:panel-empty={!hasComments && !loading}>
       <header class="head">
-        <div class="brand">
-          <span class="brand-mark" aria-hidden="true">外</span>
-          <div class="context">
-            <div class="context-line">
-              <strong class="title">外挂评论</strong>
-              {#if commentCount > 0}
-                <span class="count">{commentCount}</span>
-              {/if}
-            </div>
-            {#if context}
-              <span class="vid" title={context.title || context.videoId}>
-                {platformLabel}
-                {context.title || context.videoId}
-              </span>
-            {:else}
-              <span class="vid">未识别当前视频</span>
+        <div class="context">
+          <div class="context-line">
+            <strong class="title">外挂评论</strong>
+            {#if commentCount > 0}
+              <span class="count">{commentCount}</span>
             {/if}
           </div>
+          {#if context}
+            <span class="vid" title={context.title || context.videoId}>
+              {platformLabel}
+              {context.title || context.videoId}
+            </span>
+          {:else}
+            <span class="vid">未识别当前视频</span>
+          {/if}
         </div>
         <div class="head-actions">
           <button
@@ -306,6 +306,8 @@
           <p class="empty">加载中…</p>
         {:else if !context}
           <p class="empty">打开具体视频页后再说</p>
+        {:else if !identity?.configured}
+          <p class="empty">先在扩展设置里配置 Nostr 密钥，再来发评。</p>
         {:else if !hasComments}
           <p class="empty">还没有评论，来说两句吧</p>
         {:else}
@@ -333,13 +335,11 @@
 
       <Composer
         bind:body={composerBody}
-        bind:expanded={composerExpanded}
         target={replyTarget}
-        disabled={!context}
-        {author}
+        disabled={!context || !identity?.configured}
+        author={authorLabel}
         onSubmit={handleSubmit}
         onClearTarget={() => void handleClearTarget()}
-        onAuthorChange={handleAuthorChange}
       />
     </aside>
   {/if}
@@ -469,31 +469,9 @@
     justify-content: space-between;
     align-items: center;
     gap: 0.65rem;
-    padding: 14px 14px 12px;
+    padding: 10px 12px 8px;
     border-bottom: 1px solid var(--sc-accent-soft);
     cursor: default;
-  }
-
-  .brand {
-    min-width: 0;
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .brand-mark {
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 10px;
-    background: var(--sc-accent);
-    color: #fff;
-    font-size: 15px;
-    font-weight: 700;
-    box-shadow: 0 2px 8px rgb(251 114 153 / 30%);
   }
 
   .context {
@@ -515,7 +493,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     font-weight: 600;
     color: #2c3e50;
   }

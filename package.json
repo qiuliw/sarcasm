@@ -31,6 +31,7 @@
     "wxt": "^0.21.3"
   },
   "dependencies": {
+    "nostr-tools": "^2.25.2",
     "sql.js": "^1.14.2"
   }
 }

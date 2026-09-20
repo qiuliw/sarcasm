@@ -44,6 +44,10 @@ async function runCrud(page) {
   const ping = await send(page, { type: 'ping' });
   assert(ping?.ok, `ping failed: ${JSON.stringify(ping)}`);
 
+  const key = await send(page, { type: 'nostr_generate_key' });
+  assert(key?.ok, `generate key failed: ${JSON.stringify(key)}`);
+  assert(key.data?.nsec, '未生成 nsec');
+
   const created = await send(page, {
     type: 'create_comment',
     input: {
@@ -126,13 +130,14 @@ async function runPopupUi(page, errors) {
   await page.waitForFunction(
     () => {
       const text = document.body?.innerText || '';
-      return text.includes('本机已存') && text.includes('sarcasm');
+      return text.includes('本机评论') && text.includes('sarcasm');
     },
     { timeout: 15000 },
   );
   const body = await page.evaluate(() => document.body.innerText);
   assert(body.includes('sarcasm'), 'popup 未显示品牌');
-  assert(body.includes('本机已存'), `popup 未拿到 stats 区域：${body}`);
+  assert(body.includes('本机评论'), `popup 未拿到 stats 区域：${body}`);
+  assert(body.includes('Nostr'), `popup 未显示 Nostr 身份：${body}`);
   assert(
     !errors.some((e) => /XMLHttpRequest|Content Security|CompileError|wasm/i.test(e)),
     `popup 仍有 wasm/csp 错误：${errors.join(' | ')}`,

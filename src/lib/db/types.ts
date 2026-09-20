@@ -57,6 +57,7 @@ export interface CreateCommentInput {
   author?: string;
   parentId?: string | null;
   replyToAuthor?: string | null;
+  pageUrl?: string;
 }
 
 export interface ListCommentsQuery {

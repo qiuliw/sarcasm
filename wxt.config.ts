@@ -16,11 +16,12 @@ export default defineConfig({
       default_title: 'sarcasm',
     },
     name: 'sarcasm',
-    description: '抖音 / B站独立评论层：按视频 ID 挂载外挂评论，本地 SQLite 存储',
+    description: '抖音 / B站外挂评论：Nostr 身份，本地存储并可同步到 relay',
     permissions: ['storage'],
     host_permissions: [
       '*://*.bilibili.com/*',
       '*://*.douyin.com/*',
+      'wss://*/*',
     ],
     // MV3 默认 script-src 'self' 禁止实例化 WASM；sql.js 需要此项
     content_security_policy: {

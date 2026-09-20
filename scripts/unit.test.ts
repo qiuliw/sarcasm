@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
 import { applyVote } from '../src/lib/db/vote';
+import { createSecretKey, pubkeyToNpub, secretToPubkey, shortNpub } from '../src/lib/nostr/keys';
 import { isMeaningfulDraft, videoDraftKey } from '../src/lib/prefs/draft';
 import { bilibiliAdapter } from '../src/lib/platforms/bilibili';
 import { douyinAdapter } from '../src/lib/platforms/douyin';
@@ -97,6 +98,16 @@ describe('composer drafts', () => {
         replyTarget: { kind: 'overlay_comment', targetId: 'c1' },
       }),
     ).toBe(true);
+  });
+});
+
+describe('nostr keys', () => {
+  test('generates npub short label', () => {
+    const sk = createSecretKey();
+    const npub = pubkeyToNpub(secretToPubkey(sk));
+    const label = shortNpub(npub);
+    expect(npub.startsWith('npub1')).toBe(true);
+    expect(label.includes('…')).toBe(true);
   });
 });
 

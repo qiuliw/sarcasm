@@ -7,6 +7,7 @@ import type {
   VoteCommentInput,
   VoteKind,
 } from '../db/types';
+import type { NostrIdentity, NostrSettings } from '../nostr/settings';
 
 export type BgRequest =
   | { type: 'ping' }
@@ -14,7 +15,13 @@ export type BgRequest =
   | { type: 'create_comment'; input: CreateCommentInput }
   | { type: 'delete_comment'; id: string }
   | { type: 'vote_comment'; input: VoteCommentInput }
-  | { type: 'stats' };
+  | { type: 'stats' }
+  | { type: 'nostr_identity' }
+  | { type: 'nostr_get_settings' }
+  | { type: 'nostr_save_settings'; settings: NostrSettings }
+  | { type: 'nostr_generate_key' }
+  | { type: 'nostr_import_key'; nsec: string }
+  | { type: 'nostr_clear_key' };
 
 export type BgResponse =
   | { ok: true; data?: unknown }
@@ -50,4 +57,28 @@ export function voteComment(id: string, vote: VoteKind): Promise<CommentRecord> 
 
 export function getStats(): Promise<{ count: number }> {
   return sendBg({ type: 'stats' });
+}
+
+export function getNostrIdentity(): Promise<NostrIdentity> {
+  return sendBg({ type: 'nostr_identity' });
+}
+
+export function getNostrSettings(): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_get_settings' });
+}
+
+export function saveNostrSettingsApi(settings: NostrSettings): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_save_settings', settings });
+}
+
+export function generateNostrKeyApi(): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_generate_key' });
+}
+
+export function importNostrKeyApi(nsec: string): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_import_key', nsec });
+}
+
+export function clearNostrKeyApi(): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_clear_key' });
 }

@@ -1,15 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getStats } from '../../lib/messaging/api';
+  import { getNostrIdentity, getStats } from '../../lib/messaging/api';
+  import type { NostrIdentity } from '../../lib/nostr/settings';
 
   let count = $state<number | null>(null);
+  let identity = $state<NostrIdentity | null>(null);
   let error = $state('');
   let ready = $state(false);
 
   onMount(() => {
-    void getStats()
-      .then((s) => {
+    void Promise.all([getStats(), getNostrIdentity()])
+      .then(([s, id]) => {
         count = s.count;
+        identity = id;
       })
       .catch((e) => {
         error = e instanceof Error ? e.message : String(e);
@@ -18,22 +21,23 @@
         ready = true;
       });
   });
+
+  function openSettings() {
+    void browser.runtime.openOptionsPage();
+  }
 </script>
 
 <main class="shell">
   <header class="head">
-    <div class="brand">
-      <span class="mark" aria-hidden="true">外</span>
-      <div>
-        <h1>sarcasm</h1>
-        <p>抖音 · B站 独立评论层</p>
-      </div>
+    <div>
+      <h1>sarcasm</h1>
+      <p>抖音 · B站 · Nostr</p>
     </div>
-    <span class="status-dot" title="插件已启用" aria-label="插件已启用"></span>
+    <button type="button" class="link" onclick={openSettings}>设置</button>
   </header>
 
-  <section class="stat" aria-live="polite" aria-label="本地评论数">
-    <span>本机已存</span>
+  <section class="stat">
+    <span>本机评论</span>
     {#if !ready}
       <strong class="muted">…</strong>
     {:else if error}
@@ -43,24 +47,41 @@
     {/if}
   </section>
 
+  <section class="stat">
+    <span>Nostr 身份</span>
+    {#if !ready}
+      <strong class="muted">…</strong>
+    {:else if identity?.configured}
+      <strong class="npub">{identity.shortLabel}</strong>
+    {:else}
+      <strong class="warn">未配置</strong>
+    {/if}
+  </section>
+
   {#if error}
     <p class="err-banner">{error}</p>
   {/if}
 
   <ol class="steps">
-    <li><span>1</span>打开抖音或 B 站视频页</li>
-    <li><span>2</span>点右下角粉色按钮展开面板</li>
-    <li><span>3</span>直接评论，或点「回复」盖楼</li>
+    <li><span>1</span>设置里配置或导入 nsec</li>
+    <li><span>2</span>打开抖音 / B 站视频页</li>
+    <li><span>3</span>右下角打开面板，单行发评</li>
   </ol>
 
-  <footer>评论只保存在当前浏览器，换机不同步</footer>
+  <footer>
+    {#if identity?.publishEnabled && identity.configured}
+      发评会同步到 Nostr relay
+    {:else}
+      评论先保存在本机
+    {/if}
+  </footer>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    min-width: 300px;
-    max-width: 300px;
+    min-width: 280px;
+    max-width: 280px;
     font-family:
       'PingFang SC',
       'Hiragino Sans GB',
@@ -73,34 +94,15 @@
   }
 
   .shell {
-    padding: 14px;
+    padding: 12px;
     display: grid;
-    gap: 12px;
+    gap: 10px;
   }
 
   .head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    background: #fb7299;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    box-shadow: 0 2px 8px rgb(251 114 153 / 30%);
   }
 
   h1 {
@@ -115,19 +117,23 @@
     color: #9499a0;
   }
 
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #fb7299;
-    box-shadow: 0 0 0 4px #fff0f3;
+  .link {
+    border: 0;
+    background: transparent;
+    color: #fb7299;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
   }
 
   .stat {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 8px 10px;
     border-radius: 8px;
     background: #f1f2f3;
     color: #61666d;
@@ -135,14 +141,24 @@
   }
 
   .stat strong {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 700;
     color: #18191c;
-    font-variant-numeric: tabular-nums;
   }
 
   .stat strong.muted {
     color: #9499a0;
+  }
+
+  .stat strong.npub {
+    font-size: 12px;
+    font-weight: 600;
+    color: #fb7299;
+  }
+
+  .stat strong.warn {
+    color: #e6a23c;
+    font-size: 12px;
   }
 
   .err-banner {
@@ -160,7 +176,7 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 8px;
+    gap: 7px;
   }
 
   .steps li {
@@ -172,19 +188,19 @@
   }
 
   .steps span {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: grid;
     place-items: center;
     background: #fff0f3;
     color: #fb7299;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
   }
 
   footer {
-    padding-top: 10px;
+    padding-top: 8px;
     border-top: 1px solid #e3e5e7;
     font-size: 11px;
     color: #9499a0;
