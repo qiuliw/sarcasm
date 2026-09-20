@@ -98,7 +98,7 @@
     if (highlightTimer) window.clearTimeout(highlightTimer);
     highlightTimer = window.setTimeout(() => {
       highlightId = null;
-    }, 700);
+    }, 300);
     await tick();
     const el = scrollEl?.querySelector(`[data-id="${CSS.escape(id)}"]`);
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
