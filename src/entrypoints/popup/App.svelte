@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getNostrIdentity, getStats, openOptions } from '../../lib/messaging/api';
+  import { getNostrIdentity, getStats } from '../../lib/messaging/api';
   import type { NostrIdentity } from '../../lib/nostr/settings';
 
   let count = $state<number | null>(null);
@@ -21,10 +21,6 @@
         ready = true;
       });
   });
-
-  function openSettings() {
-    void openOptions();
-  }
 </script>
 
 <main class="shell">
@@ -33,7 +29,6 @@
       <h1>sarcasm</h1>
       <p>抖音 · B站 · Nostr</p>
     </div>
-    <button type="button" class="link" onclick={openSettings}>设置</button>
   </header>
 
   <section class="stat">
@@ -63,9 +58,9 @@
   {/if}
 
   <ol class="steps">
-    <li><span>1</span>设置里配置或导入 nsec</li>
-    <li><span>2</span>打开抖音 / B 站视频页</li>
-    <li><span>3</span>右下角打开面板，单行发评</li>
+    <li><span>1</span>打开抖音 / B 站视频页</li>
+    <li><span>2</span>右下角打开面板，点齿轮进设置</li>
+    <li><span>3</span>配置或导入 nsec 后发评</li>
   </ol>
 
   <footer>
@@ -115,17 +110,6 @@
     margin: 2px 0 0;
     font-size: 11px;
     color: #9499a0;
-  }
-
-  .link {
-    border: 0;
-    background: transparent;
-    color: #fb7299;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 0;
   }
 
   .stat {

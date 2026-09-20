@@ -2,7 +2,8 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
-  import { createComment, deleteComment, listComments, openOptions, voteComment } from '../lib/messaging/api';
+  import SettingsView from './SettingsView.svelte';
+  import { createComment, deleteComment, listComments, voteComment } from '../lib/messaging/api';
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
   import type {
     CommentRecord,
@@ -32,10 +33,12 @@
   let identity = $state<NostrIdentity | null>(null);
   let packs = $state<AnchorPack[]>([]);
   let expandedRoots = $state<Record<string, true>>({});
+  let view = $state<'feed' | 'settings'>('feed');
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
   const hasComments = $derived(forest.videoRoots.length > 0);
+  const inSettings = $derived(view === 'settings');
   const platformLabel = $derived(
     packs.find((p) => p.id === context?.platform)?.name || context?.platform || '',
   );
@@ -47,6 +50,7 @@
   const UI_OPEN_KEY = 'sarcasm_panel_open';
   async function setOpen(value: boolean) {
     open = value;
+    if (!value) view = 'feed';
     await browser.storage.local.set({ [UI_OPEN_KEY]: value });
   }
 
@@ -75,11 +79,19 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key !== 'Escape' || !open) return;
+    if (view === 'settings') {
+      view = 'feed';
+      return;
+    }
     if (replyTarget.kind !== 'video') {
       clearReplyTarget();
       return;
     }
     void setOpen(false);
+  }
+
+  function toggleSettings() {
+    view = view === 'settings' ? 'feed' : 'settings';
   }
 
   async function refreshContext() {
@@ -264,16 +276,18 @@
       {/if}
     </button>
   {:else}
-    <aside class="panel" class:panel-empty={!hasComments && !loading}>
+    <aside class="panel" class:panel-empty={!hasComments && !loading && !inSettings}>
       <header class="head">
         <div class="context">
           <div class="context-line">
-            <strong class="title">外挂评论</strong>
-            {#if commentCount > 0}
+            <strong class="title">{inSettings ? '设置' : '外挂评论'}</strong>
+            {#if !inSettings && commentCount > 0}
               <span class="count">{commentCount}</span>
             {/if}
           </div>
-          {#if context}
+          {#if inSettings}
+            <span class="vid">身份 · 事件源 · 锚点</span>
+          {:else if context}
             <span class="vid" title={context.title || context.videoId}>
               {platformLabel}
               {context.title || context.videoId}
@@ -286,30 +300,39 @@
           <button
             type="button"
             class="icon-button"
-            onclick={() => void openOptions()}
-            title="设置"
-            aria-label="设置"
+            class:active={inSettings}
+            onclick={toggleSettings}
+            title={inSettings ? '返回评论' : '设置'}
+            aria-label={inSettings ? '返回评论' : '设置'}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
-              />
-              <path
-                d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3h-4l-.4 2.5a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.7 7.7 0 0 0 1.7 1L11 21h4l.4-2.5a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"
-              />
-            </svg>
+            {#if inSettings}
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 6 9 12l6 6" />
+              </svg>
+            {:else}
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                />
+                <path
+                  d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.5-2-3.5-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3h-4l-.4 2.5a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7.7 7.7 0 0 0 1.7 1L11 21h4l.4-2.5a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5Z"
+                />
+              </svg>
+            {/if}
           </button>
-          <button
-            type="button"
-            class="icon-button"
-            onclick={() => void refreshContext()}
-            title="刷新"
-            aria-label="刷新"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 11a8 8 0 1 0-2.34 5.66M20 5v6h-6" />
-            </svg>
-          </button>
+          {#if !inSettings}
+            <button
+              type="button"
+              class="icon-button"
+              onclick={() => void refreshContext()}
+              title="刷新"
+              aria-label="刷新"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.34 5.66M20 5v6h-6" />
+              </svg>
+            </button>
+          {/if}
           <button
             type="button"
             class="icon-button"
@@ -324,50 +347,62 @@
         </div>
       </header>
 
-      {#if status}
+      {#if status && !inSettings}
         <p class="status">{status}</p>
       {/if}
 
-      <div class="scroll" class:scroll-empty={!hasComments} bind:this={scrollEl}>
-        {#if loading}
-          <p class="empty">加载中…</p>
-        {:else if !context}
-          <p class="empty">打开具体视频页后再说</p>
-        {:else if !identity?.configured}
-          <p class="empty">先在扩展设置里配置 Nostr 密钥，再来发评。</p>
-        {:else if !hasComments}
-          <p class="empty">还没有评论，来说两句吧</p>
-        {:else}
-          <section class="section">
-            <h3>
-              <span>评论</span>
-              <span class="sec-count">{forest.videoRoots.length}</span>
-            </h3>
-            <div class="list">
-              {#each forest.videoRoots as node (node.id)}
-                <CommentItem
-                  {node}
-                  {highlightId}
-                  expanded={!!expandedRoots[node.id]}
-                  onExpand={expandRoot}
-                  onReply={replyOverlay}
-                  onDelete={handleDelete}
-                  onVote={handleVote}
-                />
-              {/each}
-            </div>
-          </section>
-        {/if}
-      </div>
+      {#if inSettings}
+        <div class="scroll settings-scroll">
+          <SettingsView
+            compact
+            onSaved={() => {
+              void refreshIdentity();
+              void refreshPacks().then(() => refreshContext());
+            }}
+          />
+        </div>
+      {:else}
+        <div class="scroll" class:scroll-empty={!hasComments} bind:this={scrollEl}>
+          {#if loading}
+            <p class="empty">加载中…</p>
+          {:else if !context}
+            <p class="empty">打开具体视频页后再说</p>
+          {:else if !identity?.configured}
+            <p class="empty">点右上角齿轮配置 Nostr 密钥后再发评。</p>
+          {:else if !hasComments}
+            <p class="empty">还没有评论，来说两句吧</p>
+          {:else}
+            <section class="section">
+              <h3>
+                <span>评论</span>
+                <span class="sec-count">{forest.videoRoots.length}</span>
+              </h3>
+              <div class="list">
+                {#each forest.videoRoots as node (node.id)}
+                  <CommentItem
+                    {node}
+                    {highlightId}
+                    expanded={!!expandedRoots[node.id]}
+                    onExpand={expandRoot}
+                    onReply={replyOverlay}
+                    onDelete={handleDelete}
+                    onVote={handleVote}
+                  />
+                {/each}
+              </div>
+            </section>
+          {/if}
+        </div>
 
-      <Composer
-        bind:body={composerBody}
-        target={replyTarget}
-        disabled={!context || !identity?.configured}
-        author={authorLabel}
-        onSubmit={handleSubmit}
-        onClearTarget={() => void handleClearTarget()}
-      />
+        <Composer
+          bind:body={composerBody}
+          target={replyTarget}
+          disabled={!context || !identity?.configured}
+          author={authorLabel}
+          onSubmit={handleSubmit}
+          onClearTarget={() => void handleClearTarget()}
+        />
+      {/if}
     </aside>
   {/if}
 </div>
@@ -568,6 +603,11 @@
     transform: scale(1.08);
   }
 
+  .icon-button.active {
+    background: var(--sc-accent);
+    color: #fff;
+  }
+
   .icon-button svg {
     width: 15px;
     height: 15px;
@@ -576,6 +616,11 @@
     stroke-width: 1.9;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .settings-scroll {
+    max-height: min(70vh, 640px);
+    flex: 1 1 auto;
   }
 
   .status {
