@@ -9,7 +9,7 @@ export const PANEL_MAX_VH_STEP = 5;
 export const PANEL_MAX_VH_DEFAULT = 85;
 
 export interface UiPrefs {
-  /** 当前视频有评论时自动展开/收纳面板 */
+  /** 当前内容有评论时自动展开/收纳面板 */
   autoExpandOnComments: boolean;
   /** 面板最大高度（视口百分比） */
   panelMaxVh: number;

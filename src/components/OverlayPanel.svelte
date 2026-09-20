@@ -218,7 +218,7 @@
 
     if (!context) {
       rows = [];
-      status = '当前页未识别到视频';
+      status = '当前页未识别到内容';
       return;
     }
     status = '';
@@ -270,7 +270,7 @@
   }
 
   async function handleSubmit(body: string) {
-    if (!context) throw new Error('没有视频上下文');
+    if (!context) throw new Error('没有内容上下文');
     if (!identity?.configured) {
       throw new Error('请先在设置页配置 Nostr 密钥');
     }
@@ -464,7 +464,7 @@
             <span class="vid">{platformLabel}</span>
           {:else}
             <div class="context-line">
-              <strong class="title">未识别视频</strong>
+              <strong class="title">未识别内容</strong>
             </div>
           {/if}
         </div>
@@ -545,7 +545,7 @@
             <div class="pull-hint" aria-live="polite">同步中…</div>
           {/if}
           {#if !context}
-            <p class="empty">打开具体视频页后再说</p>
+            <p class="empty">打开具体内容页后再说</p>
           {:else if !identity?.configured}
             <p class="empty">点右上角齿轮配置 Nostr 密钥后再发评。</p>
           {:else if !hasComments}

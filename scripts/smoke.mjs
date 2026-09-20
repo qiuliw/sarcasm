@@ -52,7 +52,10 @@ async function runCrud(page) {
   assert(relayProbe.data?.[0]?.error === '仅支持 wss://', 'relay probe validation failed');
 
   const anchorExport = await send(page, { type: 'anchors_export' });
-  assert(anchorExport?.ok && anchorExport.data.includes('"bilibili"'), 'anchor export failed');
+  assert(
+    anchorExport?.ok && anchorExport.data.includes('"id": "bilibili-video"'),
+    'anchor export failed',
+  );
   assert(!anchorExport.data.includes('"tests"'), 'anchor export leaked internal fixtures');
   const anchorImport = await send(page, {
     type: 'anchors_import',
@@ -279,7 +282,10 @@ async function runContentScriptOnBilibili(browser, extensionId) {
     () => {
       const root = document.querySelector('sarcasm-root')?.shadowRoot;
       const output = root?.querySelector('textarea[aria-label="导出的锚点规则 JSON"]');
-      return output instanceof HTMLTextAreaElement && output.value.includes('"bilibili"');
+      return (
+        output instanceof HTMLTextAreaElement &&
+        output.value.includes('"id": "bilibili-video"')
+      );
     },
     { timeout: 10_000 },
   );

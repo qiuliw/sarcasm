@@ -73,7 +73,7 @@ function eventToComment(
   };
 }
 
-/** 从 relay 拉取当前视频下的 sarcasm 评论并写入本机（无需私钥） */
+/** 从 relay 拉取当前内容下的 sarcasm 评论并写入本机（无需私钥） */
 export async function pullCommentsFromNostr(
   input: PullCommentsInput,
 ): Promise<PullCommentsResult> {

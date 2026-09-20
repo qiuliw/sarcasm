@@ -93,7 +93,7 @@
       class="line"
       type="text"
       maxlength="500"
-      placeholder={disabled ? '打开视频页后再评论' : label(target)}
+      placeholder={disabled ? '打开内容页后再评论' : label(target)}
       value={body}
       {disabled}
       oninput={(e) => (body = e.currentTarget.value)}

@@ -16,7 +16,7 @@ export default defineConfig({
       default_title: 'sarcasm',
     },
     name: 'sarcasm',
-    description: 'B站 / 抖音外挂评论：Nostr 同步',
+    description: 'B站内容 / 抖音视频外挂评论：Nostr 同步',
     permissions: ['storage', 'alarms'],
     host_permissions: [
       '*://*.bilibili.com/*',

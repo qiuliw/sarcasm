@@ -136,19 +136,29 @@ describe('anchor rules', () => {
   test('built-in fixtures stay valid', () => {
     const fixtures = [
       {
-        packId: 'bilibili',
+        packId: 'bilibili-video',
         url: 'https://www.bilibili.com/video/BV1GJ411x7h7/',
         expectedId: 'BV1GJ411x7h7',
       },
       {
-        packId: 'douyin',
+        packId: 'douyin-video',
         url: 'https://www.douyin.com/video/7123456789012345678',
         expectedId: '7123456789012345678',
       },
       {
-        packId: 'douyin',
+        packId: 'douyin-video',
         url: 'https://www.douyin.com/jingxuan?modal_id=7654524171870899499',
         expectedId: '7654524171870899499',
+      },
+      {
+        packId: 'bilibili-article',
+        url: 'https://www.bilibili.com/read/cv123456',
+        expectedId: 'cv123456',
+      },
+      {
+        packId: 'bilibili-article',
+        url: 'https://www.bilibili.com/opus/987654321',
+        expectedId: 'opus987654321',
       },
     ];
     for (const fixture of fixtures) {
@@ -162,7 +172,7 @@ describe('anchor rules', () => {
       BUILTIN_PACKS,
       'https://www.bilibili.com/video/BV1GJ411x7h7/',
     );
-    expect(ctx?.platform).toBe('bilibili');
+    expect(ctx?.platform).toBe('bilibili-video');
     expect(ctx?.videoId).toBe('BV1GJ411x7h7');
   });
 

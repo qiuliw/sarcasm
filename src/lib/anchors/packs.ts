@@ -5,7 +5,7 @@ export const ANCHOR_SCHEMA_VERSION = 1;
 export interface VideoIdRule {
   /** 从 URL 路径或查询参数提取。 */
   from: 'path' | 'query';
-  /** 第一个捕获组作为视频 ID。 */
+  /** 第一个捕获组作为内容 ID。 */
   pattern: string;
   /** from=query 时的参数名。 */
   queryKey?: string;
@@ -32,7 +32,7 @@ export interface AnchorRulesDocument {
 
 export const BUILTIN_PACKS: AnchorPack[] = [
   {
-    id: 'bilibili',
+    id: 'bilibili-video',
     name: 'B站·视频',
     hosts: ['bilibili.com'],
     pathIncludes: ['/video/'],
@@ -43,7 +43,17 @@ export const BUILTIN_PACKS: AnchorPack[] = [
     ],
   },
   {
-    id: 'douyin',
+    id: 'bilibili-article',
+    name: 'B站·文章',
+    hosts: ['bilibili.com'],
+    pathIncludes: ['/read/', '/opus/'],
+    videoIdRules: [
+      { from: 'path', pattern: '/read/(cv\\d+)' },
+      { from: 'path', pattern: '/opus/(\\d+)', prefix: 'opus' },
+    ],
+  },
+  {
+    id: 'douyin-video',
     name: '抖音·视频',
     hosts: ['douyin.com'],
     videoIdRules: [

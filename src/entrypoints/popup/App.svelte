@@ -58,7 +58,7 @@
   {/if}
 
   <ol class="steps">
-    <li><span>1</span>打开抖音 / B 站视频页</li>
+    <li><span>1</span>打开抖音视频或 B 站视频 / 文章</li>
     <li><span>2</span>右下角打开面板，点齿轮进设置</li>
     <li><span>3</span>配置或导入 nsec 后发评</li>
   </ol>

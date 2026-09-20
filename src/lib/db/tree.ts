@@ -2,7 +2,7 @@ import type { CommentRecord, CommentTreeNode } from './types';
 
 /**
  * 组装最多两级的评论树：
- * - 一级：回复当前视频
+ * - 一级：回复当前内容
  * - 二级：全部挂在一级下（历史若误写成更深 parent，会提升到一级）
  */
 export function buildCommentForest(rows: CommentRecord[]): {
