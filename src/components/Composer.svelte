@@ -4,7 +4,6 @@
   interface Props {
     target: ReplyTarget | null;
     disabled?: boolean;
-    autofocus?: boolean;
     author: string;
     onSubmit: (body: string) => Promise<void> | void;
     onClearTarget: () => void;
@@ -14,7 +13,6 @@
   let {
     target,
     disabled = false,
-    autofocus = false,
     author,
     onSubmit,
     onClearTarget,
@@ -24,9 +22,12 @@
   let body = $state('');
   let busy = $state(false);
   let error = $state('');
+  let expanded = $state(false);
   let editingAuthor = $state(false);
   let draftAuthor = $state('');
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
+
+  const replyMode = $derived(!!target && target.kind !== 'video');
 
   function label(t: ReplyTarget | null): string {
     if (!t || t.kind === 'video') return '发条评论';
@@ -34,16 +35,22 @@
     return '回复评论';
   }
 
-  $effect(() => {
-    if (autofocus && !disabled) {
-      queueMicrotask(() => textareaEl?.focus());
-    }
-  });
+  function expand() {
+    if (disabled) return;
+    expanded = true;
+    queueMicrotask(() => textareaEl?.focus());
+  }
+
+  function collapse() {
+    expanded = false;
+    editingAuthor = false;
+    error = '';
+  }
 
   $effect(() => {
-    void target?.kind;
-    void target?.targetId;
-    if (!disabled && target && target.kind !== 'video') {
+    // 点「回复」时自动展开
+    if (replyMode) {
+      expanded = true;
       queueMicrotask(() => textareaEl?.focus());
     }
   });
@@ -76,7 +83,7 @@
     try {
       await onSubmit(body.trim());
       body = '';
-      queueMicrotask(() => textareaEl?.focus());
+      collapse();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -88,64 +95,93 @@
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       void submit();
+      return;
     }
+    if (e.key === 'Escape') {
+      if (body.trim()) return;
+      e.preventDefault();
+      if (replyMode) onClearTarget();
+      collapse();
+    }
+  }
+
+  function cancelExpanded() {
+    if (replyMode) onClearTarget();
+    body = '';
+    collapse();
   }
 </script>
 
 <section class="composer">
-  {#if target && target.kind !== 'video'}
-    <div class="target">
-      <div class="target-main">
-        <span class="badge">{label(target)}</span>
+  {#if !expanded}
+    <button
+      type="button"
+      class="collapsed"
+      disabled={disabled}
+      onclick={expand}
+      aria-expanded="false"
+    >
+      <span class="collapsed-author">{author}</span>
+      <span class="collapsed-hint">{disabled ? '打开视频页后再评论' : `${label(target)}…`}</span>
+    </button>
+  {:else}
+    {#if replyMode}
+      <div class="target">
+        <div class="target-main">
+          <span class="badge">{label(target)}</span>
+        </div>
+        <button type="button" class="clear" onclick={cancelExpanded}>取消</button>
       </div>
-      <button type="button" class="clear" onclick={onClearTarget}>取消</button>
-    </div>
-    {#if target.preview}
-      <p class="preview">「{target.preview}」</p>
+      {#if target?.preview}
+        <p class="preview">「{target.preview}」</p>
+      {/if}
     {/if}
-  {/if}
 
-  <div class="box">
-    <div class="identity">
-      {#if editingAuthor}
-        <input
-          class="author-input"
-          maxlength="24"
-          bind:value={draftAuthor}
-          onkeydown={onAuthorKeydown}
-          onblur={() => void commitAuthor()}
-          aria-label="昵称"
-        />
-      {:else}
-        <button type="button" class="author" onclick={startEditAuthor} title="改昵称">
-          {author}
+    <div class="box">
+      <div class="identity">
+        {#if editingAuthor}
+          <input
+            class="author-input"
+            maxlength="24"
+            bind:value={draftAuthor}
+            onkeydown={onAuthorKeydown}
+            onblur={() => void commitAuthor()}
+            aria-label="昵称"
+          />
+        {:else}
+          <button type="button" class="author" onclick={startEditAuthor} title="改昵称">
+            {author}
+          </button>
+        {/if}
+      </div>
+      <textarea
+        bind:this={textareaEl}
+        rows="2"
+        placeholder={`${label(target)}…`}
+        bind:value={body}
+        {disabled}
+        onkeydown={onKeydown}
+      ></textarea>
+      <div class="actions">
+        {#if error}
+          <span class="error">{error}</span>
+        {:else}
+          <span class="tip">Ctrl / ⌘ + Enter</span>
+        {/if}
+        {#if !replyMode}
+          <button type="button" class="clear" onclick={cancelExpanded}>收起</button>
+        {/if}
+        <button
+          type="button"
+          class="send"
+          disabled={disabled || busy || !body.trim()}
+          onclick={() => void submit()}
+        >
+          {busy ? '发送中' : '发布'}
         </button>
-      {/if}
+      </div>
     </div>
-    <textarea
-      bind:this={textareaEl}
-      rows="2"
-      placeholder={disabled ? '打开视频页后再评论' : `${label(target)}…`}
-      bind:value={body}
-      {disabled}
-      onkeydown={onKeydown}
-    ></textarea>
-    <div class="actions">
-      {#if error}
-        <span class="error">{error}</span>
-      {:else}
-        <span class="tip">Ctrl / ⌘ + Enter</span>
-      {/if}
-      <button
-        type="button"
-        class="send"
-        disabled={disabled || busy || !body.trim()}
-        onclick={() => void submit()}
-      >
-        {busy ? '发送中' : '发布'}
-      </button>
-    </div>
-  </div>
+  {/if}
 </section>
 
 <style>
@@ -155,6 +191,47 @@
     padding: 10px 14px 14px;
     border-top: 1px solid var(--sc-line);
     background: var(--sc-panel);
+  }
+
+  .collapsed {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--sc-surface);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+  }
+
+  .collapsed:hover:not(:disabled) {
+    background: #e9eaec;
+  }
+
+  .collapsed:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .collapsed-author {
+    flex-shrink: 0;
+    color: var(--sc-muted);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .collapsed-hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--sc-faint);
+    font-size: 13px;
   }
 
   .target {

@@ -283,7 +283,6 @@
       <Composer
         target={replyTarget}
         disabled={!context}
-        autofocus={open}
         {author}
         onSubmit={handleSubmit}
         onClearTarget={clearReplyTarget}
