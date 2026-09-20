@@ -105,14 +105,28 @@
     }
   }
 
-  async function copyExported() {
-    if (!exportedNsec) return;
+  async function copyText(text: string, okMessage: string) {
     try {
-      await navigator.clipboard.writeText(exportedNsec);
-      status = '已复制到剪贴板';
+      await navigator.clipboard.writeText(text);
+      status = okMessage;
       error = '';
     } catch {
       error = '复制失败，请手动选中复制';
+    }
+  }
+
+  async function exportRules() {
+    busy = true;
+    error = '';
+    status = '';
+    try {
+      const json = await exportAnchorPacks(true);
+      packJson = json;
+      await copyText(json, '已复制到剪贴板');
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
     }
   }
 
@@ -127,7 +141,7 @@
   {#if !compact}
     <header class="intro">
       <h1>设置</h1>
-      <p>身份、同步与站点规则。</p>
+      <p>身份、同步与锚点规则。</p>
     </header>
   {/if}
 
@@ -208,7 +222,7 @@
         <span>nsec</span>
         <input type="text" readonly value={exportedNsec} />
       </label>
-      <button type="button" class="ghost" disabled={busy} onclick={() => void copyExported()}>
+      <button type="button" class="ghost" disabled={busy} onclick={() => void copyText(exportedNsec, '已复制到剪贴板')}>
         复制
       </button>
     {/if}
@@ -288,7 +302,7 @@
   </section>
 
   <section class="card">
-    <h2>站点规则</h2>
+    <h2>锚点规则</h2>
     <ul class="pack-list">
       {#each packs as pack (pack.id)}
         <li>
@@ -298,16 +312,7 @@
       {/each}
     </ul>
     <div class="actions">
-      <button
-        type="button"
-        class="ghost"
-        disabled={busy}
-        onclick={() =>
-          void run(async () => {
-            packJson = await exportAnchorPacks(true);
-            showRulesImport = true;
-          }, '已导出')}
-      >
+      <button type="button" class="ghost" disabled={busy} onclick={() => void exportRules()}>
         导出
       </button>
       <button
@@ -317,6 +322,7 @@
         disabled={busy}
         onclick={() => {
           showRulesImport = !showRulesImport;
+          if (!showRulesImport) packJson = '';
         }}
       >
         导入
@@ -345,6 +351,7 @@
         onclick={() =>
           void run(async () => {
             await importAnchorPacks(packJson);
+            packJson = '';
             showRulesImport = false;
           }, '已导入')}
       >
