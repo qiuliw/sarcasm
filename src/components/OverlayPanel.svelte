@@ -274,6 +274,7 @@
     <button
       type="button"
       class="fab"
+      class:fab-muted={commentCount === 0}
       onclick={() => void setOpen(true)}
       title="打开评论"
       aria-label="打开评论"
@@ -475,12 +476,27 @@
     color: #fff;
     box-shadow: 0 6px 16px rgb(251 114 153 / 40%);
     cursor: pointer;
-    transition: transform 180ms ease, box-shadow 180ms ease;
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease,
+      background 180ms ease,
+      color 180ms ease;
+  }
+
+  .fab.fab-muted {
+    background: #c8c9cc;
+    color: #fff;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
   }
 
   .fab:hover {
     transform: scale(1.08);
     box-shadow: 0 8px 20px rgb(251 114 153 / 48%);
+  }
+
+  .fab.fab-muted:hover {
+    background: #b0b1b5;
+    box-shadow: 0 6px 14px rgb(0 0 0 / 12%);
   }
 
   .fab svg {
