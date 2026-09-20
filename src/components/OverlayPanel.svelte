@@ -547,11 +547,6 @@
     padding-top: 8px;
   }
 
-  .section + .section {
-    margin-top: 4px;
-    border-top: 1px solid var(--sc-line);
-  }
-
   h3 {
     margin: 0 0 4px;
     display: flex;
