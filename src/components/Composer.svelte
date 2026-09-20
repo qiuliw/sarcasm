@@ -5,24 +5,30 @@
     target: ReplyTarget | null;
     disabled?: boolean;
     author: string;
+    body?: string;
+    expanded?: boolean;
     onSubmit: (body: string) => Promise<void> | void;
     onClearTarget: () => void;
     onAuthorChange: (name: string) => Promise<void> | void;
+    onBodyChange?: (body: string) => void;
+    onExpandedChange?: (expanded: boolean) => void;
   }
 
   let {
     target,
     disabled = false,
     author,
+    body = $bindable(''),
+    expanded = $bindable(false),
     onSubmit,
     onClearTarget,
     onAuthorChange,
+    onBodyChange,
+    onExpandedChange,
   }: Props = $props();
 
-  let body = $state('');
   let busy = $state(false);
   let error = $state('');
-  let expanded = $state(false);
   let editingAuthor = $state(false);
   let draftAuthor = $state('');
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
@@ -35,22 +41,31 @@
     return '回复评论';
   }
 
+  function setExpanded(value: boolean) {
+    expanded = value;
+    onExpandedChange?.(value);
+  }
+
+  function setBody(value: string) {
+    body = value;
+    onBodyChange?.(value);
+  }
+
   function expand() {
     if (disabled) return;
-    expanded = true;
+    setExpanded(true);
     queueMicrotask(() => textareaEl?.focus());
   }
 
   function collapse() {
-    expanded = false;
+    setExpanded(false);
     editingAuthor = false;
     error = '';
   }
 
   $effect(() => {
-    // 点「回复」时自动展开
     if (replyMode) {
-      expanded = true;
+      setExpanded(true);
       queueMicrotask(() => textareaEl?.focus());
     }
   });
@@ -82,7 +97,7 @@
     error = '';
     try {
       await onSubmit(body.trim());
-      body = '';
+      setBody('');
       collapse();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -107,7 +122,7 @@
 
   function cancelExpanded() {
     if (replyMode) onClearTarget();
-    body = '';
+    setBody('');
     collapse();
   }
 </script>
@@ -122,7 +137,15 @@
       aria-expanded="false"
     >
       <span class="collapsed-author">{author}</span>
-      <span class="collapsed-hint">{disabled ? '打开视频页后再评论' : `${label(target)}…`}</span>
+      <span class="collapsed-hint">
+        {#if disabled}
+          打开视频页后再评论
+        {:else if body.trim()}
+          未发送草稿：{body.trim()}
+        {:else}
+          {label(target)}…
+        {/if}
+      </span>
     </button>
   {:else}
     {#if replyMode}
@@ -158,8 +181,9 @@
         bind:this={textareaEl}
         rows="2"
         placeholder={`${label(target)}…`}
-        bind:value={body}
+        value={body}
         {disabled}
+        oninput={(e) => setBody(e.currentTarget.value)}
         onkeydown={onKeydown}
       ></textarea>
       <div class="actions">

@@ -13,11 +13,14 @@
   } from '../lib/db/types';
   import { readPageContext, resolveAdapter } from '../lib/platforms';
   import { getDefaultAuthor, loadAuthor, saveAuthor } from '../lib/prefs/author';
+  import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
 
   let open = $state(false);
   let context = $state<PageContext | null>(null);
   let rows = $state<CommentRecord[]>([]);
-  let replyTarget = $state<ReplyTarget | null>({ kind: 'video' });
+  let replyTarget = $state<ReplyTarget>({ kind: 'video' });
+  let composerBody = $state('');
+  let composerExpanded = $state(false);
   let loading = $state(false);
   let status = $state('');
   let highlightId = $state<string | null>(null);
@@ -45,9 +48,30 @@
     replyTarget = { kind: 'video' };
   }
 
+  async function persistDraftFor(ctx: PageContext) {
+    await saveDraft(ctx.platform, ctx.videoId, {
+      body: composerBody,
+      replyTarget,
+      expanded: composerExpanded,
+    });
+  }
+
+  async function restoreDraftFor(ctx: PageContext) {
+    const draft = await loadDraft(ctx.platform, ctx.videoId);
+    if (!draft || !isMeaningfulDraft(draft)) {
+      composerBody = '';
+      replyTarget = { kind: 'video' };
+      composerExpanded = false;
+      return;
+    }
+    composerBody = draft.body;
+    replyTarget = draft.replyTarget;
+    composerExpanded = draft.expanded || Boolean(draft.body.trim()) || draft.replyTarget.kind !== 'video';
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key !== 'Escape' || !open) return;
-    if (replyTarget && replyTarget.kind !== 'video') {
+    if (replyTarget.kind !== 'video') {
       clearReplyTarget();
       return;
     }
@@ -58,12 +82,25 @@
     const next = readPageContext();
     const switched =
       context?.platform !== next?.platform || context?.videoId !== next?.videoId;
+
+    if (switched && context) {
+      await persistDraftFor(context);
+    }
+
     context = next;
+
     if (switched) {
-      clearReplyTarget();
       highlightId = null;
       expandedRoots = {};
+      if (context) {
+        await restoreDraftFor(context);
+      } else {
+        composerBody = '';
+        replyTarget = { kind: 'video' };
+        composerExpanded = false;
+      }
     }
+
     if (!context) {
       rows = [];
       status = '当前页未识别到视频';
@@ -101,7 +138,7 @@
 
   async function handleSubmit(body: string) {
     if (!context) throw new Error('没有视频上下文');
-    const target = replyTarget ?? { kind: 'video' as const };
+    const target = replyTarget;
 
     const created = await createComment({
       platform: context.platform,
@@ -122,6 +159,9 @@
     }
 
     clearReplyTarget();
+    composerBody = '';
+    composerExpanded = false;
+    await clearDraft(context.platform, context.videoId);
     await reloadComments();
     await flashAndScroll(created.id);
   }
@@ -140,6 +180,7 @@
       replyToAuthor: resolved.replyToAuthor ?? undefined,
       preview: node.body.slice(0, 80),
     };
+    composerExpanded = true;
   }
 
   async function handleDelete(id: string) {
@@ -154,6 +195,13 @@
 
   async function handleAuthorChange(name: string) {
     author = await saveAuthor(name);
+  }
+
+  async function handleClearTarget() {
+    clearReplyTarget();
+    if (!composerBody.trim() && context) {
+      await clearDraft(context.platform, context.videoId);
+    }
   }
 
   onMount(() => {
@@ -173,6 +221,9 @@
   });
 
   onDestroy(() => {
+    if (context) {
+      void persistDraftFor(context);
+    }
     stopNav?.();
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
@@ -281,11 +332,13 @@
       </div>
 
       <Composer
+        bind:body={composerBody}
+        bind:expanded={composerExpanded}
         target={replyTarget}
         disabled={!context}
         {author}
         onSubmit={handleSubmit}
-        onClearTarget={clearReplyTarget}
+        onClearTarget={() => void handleClearTarget()}
         onAuthorChange={handleAuthorChange}
       />
     </aside>

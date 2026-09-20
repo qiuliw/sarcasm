@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
 import { applyVote } from '../src/lib/db/vote';
+import { isMeaningfulDraft, videoDraftKey } from '../src/lib/prefs/draft';
 import { bilibiliAdapter } from '../src/lib/platforms/bilibili';
 import { douyinAdapter } from '../src/lib/platforms/douyin';
 
@@ -78,6 +79,24 @@ describe('applyVote', () => {
       dislikes: 0,
       myVote: 'up',
     });
+  });
+});
+
+describe('composer drafts', () => {
+  test('keys by platform and video, and ignores empty drafts', () => {
+    expect(videoDraftKey('bilibili', 'BV1')).toBe('bilibili:BV1');
+    expect(
+      isMeaningfulDraft({ body: '', replyTarget: { kind: 'video' } }),
+    ).toBe(false);
+    expect(
+      isMeaningfulDraft({ body: 'hi', replyTarget: { kind: 'video' } }),
+    ).toBe(true);
+    expect(
+      isMeaningfulDraft({
+        body: '',
+        replyTarget: { kind: 'overlay_comment', targetId: 'c1' },
+      }),
+    ).toBe(true);
   });
 });
 
