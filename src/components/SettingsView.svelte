@@ -34,8 +34,9 @@
   let nsecInput = $state('');
   let exportedNsec = $state('');
   let showExport = $state(false);
+  let showImport = $state(false);
+  let showRulesImport = $state(false);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
-  let showNsec = $state(false);
   let status = $state('');
   let error = $state('');
   let busy = $state(false);
@@ -136,8 +137,6 @@
     <h2>身份</h2>
     {#if identity?.configured && identity.npub}
       <p class="mono" title={identity.npub}>{shortNpub(identity.npub)}</p>
-    {:else}
-      <p class="hint">创建密钥后即可发评。</p>
     {/if}
 
     <label class="field">
@@ -145,7 +144,7 @@
       <input
         type="text"
         maxlength="32"
-        placeholder="可选，默认短公钥"
+        placeholder="可选"
         value={settings?.displayName ?? ''}
         oninput={(e) => {
           if (settings) settings.displayName = e.currentTarget.value;
@@ -164,7 +163,7 @@
             await generateNostrKeyApi();
           }, '密钥已生成')}
       >
-        生成密钥
+        生成
       </button>
       <button
         type="button"
@@ -172,7 +171,19 @@
         disabled={busy || !identity?.configured}
         onclick={() => void exportKey()}
       >
-        导出密钥
+        导出
+      </button>
+      <button
+        type="button"
+        class="ghost"
+        class:active={showImport}
+        disabled={busy}
+        onclick={() => {
+          showImport = !showImport;
+          if (!showImport) nsecInput = '';
+        }}
+      >
+        导入
       </button>
       <button
         type="button"
@@ -182,6 +193,7 @@
           void run(async () => {
             exportedNsec = '';
             showExport = false;
+            showImport = false;
             await clearNostrKeyApi();
           }, '密钥已清除')}
       >
@@ -191,40 +203,39 @@
 
     {#if showExport && exportedNsec}
       <label class="field">
-        <span>私钥 nsec</span>
+        <span>nsec</span>
         <input type="text" readonly value={exportedNsec} />
       </label>
       <button type="button" class="ghost" disabled={busy} onclick={() => void copyExported()}>
-        复制密钥
+        复制
       </button>
     {/if}
 
-    <label class="field">
-      <span>导入密钥</span>
-      <input
-        type={showNsec ? 'text' : 'password'}
-        placeholder="nsec1…"
-        bind:value={nsecInput}
-        autocomplete="off"
-      />
-    </label>
-    <label class="check">
-      <input type="checkbox" bind:checked={showNsec} />
-      显示内容
-    </label>
-    <button
-      type="button"
-      disabled={busy || !nsecInput.trim()}
-      onclick={() =>
-        void run(async () => {
-          await importNostrKeyApi(nsecInput);
-          nsecInput = '';
-          exportedNsec = '';
-          showExport = false;
-        }, '密钥已导入')}
-    >
-      导入
-    </button>
+    {#if showImport}
+      <label class="field">
+        <span>nsec</span>
+        <input
+          type="password"
+          placeholder="nsec1…"
+          bind:value={nsecInput}
+          autocomplete="off"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={busy || !nsecInput.trim()}
+        onclick={() =>
+          void run(async () => {
+            await importNostrKeyApi(nsecInput);
+            nsecInput = '';
+            exportedNsec = '';
+            showExport = false;
+            showImport = false;
+          }, '密钥已导入')}
+      >
+        确认导入
+      </button>
+    {/if}
   </section>
 
   <section class="card">
@@ -253,7 +264,7 @@
             if (settings) settings.publishEnabled = e.currentTarget.checked;
           }}
         />
-        发评时同步到 Nostr
+        发评同步
       </label>
     {/if}
 
@@ -292,6 +303,7 @@
         onclick={() =>
           void run(async () => {
             packJson = await exportAnchorPacks(true);
+            showRulesImport = true;
           }, '已导出')}
       >
         导出
@@ -299,27 +311,44 @@
       <button
         type="button"
         class="ghost"
+        class:active={showRulesImport}
+        disabled={busy}
+        onclick={() => {
+          showRulesImport = !showRulesImport;
+        }}
+      >
+        导入
+      </button>
+      <button
+        type="button"
+        class="ghost"
         disabled={busy || customCount === 0}
-        onclick={() => void run(async () => clearCustomAnchorPacks(), '已清空')}
+        onclick={() => void run(async () => clearCustomAnchorPacks(), '已重置')}
       >
         重置
       </button>
     </div>
-    <label class="field">
-      <span>导入</span>
-      <textarea
-        rows={compact ? 4 : 6}
-        bind:value={packJson}
-        placeholder="粘贴规则 JSON"
-      ></textarea>
-    </label>
-    <button
-      type="button"
-      disabled={busy || !packJson.trim()}
-      onclick={() => void run(async () => importAnchorPacks(packJson), '已导入')}
-    >
-      导入
-    </button>
+    {#if showRulesImport}
+      <label class="field">
+        <span>JSON</span>
+        <textarea
+          rows={compact ? 4 : 6}
+          bind:value={packJson}
+          placeholder="粘贴规则 JSON"
+        ></textarea>
+      </label>
+      <button
+        type="button"
+        disabled={busy || !packJson.trim()}
+        onclick={() =>
+          void run(async () => {
+            await importAnchorPacks(packJson);
+            showRulesImport = false;
+          }, '已导入')}
+      >
+        确认导入
+      </button>
+    {/if}
   </section>
 </div>
 
@@ -458,6 +487,11 @@
     background: #fff;
     color: var(--sc-muted, #61666d);
     border: 1px solid var(--sc-line, #e3e5e7);
+  }
+
+  button.ghost.active {
+    border-color: var(--sc-accent, #fb7299);
+    color: var(--sc-accent, #fb7299);
   }
 
   button:disabled {
