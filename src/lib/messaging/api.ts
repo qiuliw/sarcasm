@@ -10,6 +10,7 @@ import type {
 import type { NostrIdentity, NostrSettings } from '../nostr/settings';
 import type { AnchorPack } from '../anchors/packs';
 import type { BackendId } from '../backends/dispatch';
+import type { OutboxTrashItem } from '../backends/outbox';
 
 export type BgRequest =
   | { type: 'ping' }
@@ -20,6 +21,9 @@ export type BgRequest =
   | { type: 'vote_comment'; input: VoteCommentInput }
   | { type: 'stats' }
   | { type: 'outbox_pending' }
+  | { type: 'outbox_trash_list' }
+  | { type: 'outbox_trash_clear' }
+  | { type: 'outbox_trash_retry'; ids?: string[] }
   | { type: 'nostr_identity' }
   | { type: 'nostr_get_settings' }
   | { type: 'nostr_save_settings'; settings: NostrSettings }
@@ -72,8 +76,20 @@ export function getStats(): Promise<{ count: number }> {
   return sendBg({ type: 'stats' });
 }
 
-export function getOutboxPending(): Promise<{ count: number }> {
+export function getOutboxPending(): Promise<{ count: number; trash: number }> {
   return sendBg({ type: 'outbox_pending' });
+}
+
+export function listOutboxTrash(): Promise<OutboxTrashItem[]> {
+  return sendBg({ type: 'outbox_trash_list' });
+}
+
+export function clearOutboxTrashApi(): Promise<void> {
+  return sendBg({ type: 'outbox_trash_clear' });
+}
+
+export function retryOutboxTrashApi(ids?: string[]): Promise<number> {
+  return sendBg({ type: 'outbox_trash_retry', ids });
 }
 
 /** content script 没有 openOptionsPage，统一走 background */

@@ -18,7 +18,7 @@
     observeHref,
     resolvePageContextSync,
   } from '../lib/anchors/store';
-  import { OUTBOX_KEY } from '../lib/backends/outbox';
+  import { OUTBOX_KEY, OUTBOX_TRASH_KEY } from '../lib/backends/outbox';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
   import { loadNostrIdentity, type NostrIdentity } from '../lib/nostr/settings';
 
@@ -36,6 +36,7 @@
   let expandedRoots = $state<Record<string, true>>({});
   let view = $state<'feed' | 'settings'>('feed');
   let outboxPending = $state(0);
+  let outboxTrash = $state(0);
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
@@ -228,8 +229,9 @@
 
   async function refreshOutbox() {
     try {
-      const { count } = await getOutboxPending();
+      const { count, trash } = await getOutboxPending();
       outboxPending = count;
+      outboxTrash = trash;
     } catch {
       // ignore
     }
@@ -246,7 +248,7 @@
     const onStorage = (changes: Record<string, unknown>, area: string) => {
       if (area !== 'local') return;
       void refreshIdentity();
-      if (OUTBOX_KEY in changes) void refreshOutbox();
+      if (OUTBOX_KEY in changes || OUTBOX_TRASH_KEY in changes) void refreshOutbox();
       if ('sarcasm_anchor_packs_v1' in changes) {
         void refreshPacks().then(() => refreshContext());
       }
@@ -377,6 +379,7 @@
           <SettingsView
             compact
             outboxPending={outboxPending}
+            outboxTrash={outboxTrash}
             onSaved={() => {
               void refreshIdentity();
               void refreshOutbox();

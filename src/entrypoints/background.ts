@@ -13,11 +13,15 @@ import {
   saveEnabledBackends,
 } from '../lib/backends/dispatch';
 import {
+  clearOutboxTrash,
   enqueueOutbound,
   ensureOutboxAlarm,
   flushOutbox,
   isOutboxAlarm,
   outboxPendingCount,
+  outboxTrashCount,
+  outboxTrashList,
+  retryOutboxTrash,
 } from '../lib/backends/outbox';
 import {
   exportPacksJson,
@@ -114,7 +118,20 @@ async function handle(message: BgRequest): Promise<BgResponse> {
     case 'stats':
       return { ok: true, data: { count: await countAll() } };
     case 'outbox_pending':
-      return { ok: true, data: { count: await outboxPendingCount() } };
+      return {
+        ok: true,
+        data: {
+          count: await outboxPendingCount(),
+          trash: await outboxTrashCount(),
+        },
+      };
+    case 'outbox_trash_list':
+      return { ok: true, data: await outboxTrashList() };
+    case 'outbox_trash_clear':
+      await clearOutboxTrash();
+      return { ok: true };
+    case 'outbox_trash_retry':
+      return { ok: true, data: await retryOutboxTrash(message.ids) };
     case 'nostr_identity':
       return { ok: true, data: await loadNostrIdentity() };
     case 'nostr_get_settings':

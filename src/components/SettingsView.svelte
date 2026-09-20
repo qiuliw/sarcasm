@@ -3,6 +3,7 @@
   import {
     clearCustomAnchorPacks,
     clearNostrKeyApi,
+    clearOutboxTrashApi,
     exportAnchorPacks,
     exportNostrKeyApi,
     generateNostrKeyApi,
@@ -11,7 +12,9 @@
     importAnchorPacks,
     importNostrKeyApi,
     listAnchorPacks,
+    listOutboxTrash,
     resetAllConfigApi,
+    retryOutboxTrashApi,
     saveDisplayNameApi,
     saveNostrSettingsApi,
     setEnabledBackends,
@@ -23,14 +26,21 @@
   } from '../lib/nostr/settings';
   import type { AnchorPack } from '../lib/anchors/packs';
   import { availableBackends, type BackendId } from '../lib/backends/dispatch';
+  import type { OutboxTrashItem } from '../lib/backends/outbox';
 
   interface Props {
     compact?: boolean;
     outboxPending?: number;
+    outboxTrash?: number;
     onSaved?: () => void;
   }
 
-  let { compact = false, outboxPending = 0, onSaved }: Props = $props();
+  let {
+    compact = false,
+    outboxPending = 0,
+    outboxTrash = 0,
+    onSaved,
+  }: Props = $props();
 
   let settings = $state<NostrSettings | null>(null);
   let nsecInput = $state('');
@@ -38,6 +48,8 @@
   let showExport = $state(false);
   let showImport = $state(false);
   let showSync = $state(false);
+  let showTrash = $state(false);
+  let trashItems = $state<OutboxTrashItem[]>([]);
   let confirmReset = $state(false);
   let rulesPanel = $state<'export' | 'import' | null>(null);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
@@ -141,6 +153,24 @@
     }
     rulesPanel = 'import';
     packJson = '';
+  }
+
+  async function openTrash(e: MouseEvent) {
+    e.stopPropagation();
+    showSync = true;
+    showTrash = !showTrash;
+    if (showTrash) {
+      try {
+        trashItems = await listOutboxTrash();
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+      }
+    }
+  }
+
+  function previewBody(body: string): string {
+    const one = body.replace(/\s+/g, ' ').trim();
+    return one.length > 48 ? `${one.slice(0, 48)}…` : one;
   }
 
   onMount(() => {
@@ -305,11 +335,97 @@
         {#if outboxPending > 0}
           <span class="pending">待同步 {outboxPending}</span>
         {/if}
+        <span
+          class="trash-btn"
+          class:has-items={outboxTrash > 0}
+          role="button"
+          tabindex="0"
+          title={outboxTrash > 0 ? `垃圾桶 ${outboxTrash}` : '垃圾桶'}
+          aria-label={outboxTrash > 0 ? `垃圾桶 ${outboxTrash}` : '垃圾桶'}
+          onclick={openTrash}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openTrash(e as unknown as MouseEvent);
+            }
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12" />
+          </svg>
+          {#if outboxTrash > 0}
+            <span class="trash-count">{outboxTrash > 99 ? '99+' : outboxTrash}</span>
+          {/if}
+        </span>
         <span class="chevron" class:open={showSync}>›</span>
       </span>
     </button>
 
     {#if showSync}
+      {#if showTrash}
+        <div class="trash-panel">
+          <div class="trash-head">
+            <span>永久失败</span>
+            <div class="actions">
+              <button
+                type="button"
+                class="ghost"
+                disabled={busy || trashItems.length === 0}
+                onclick={() =>
+                  void run(async () => {
+                    await retryOutboxTrashApi();
+                    trashItems = await listOutboxTrash();
+                  }, '已重新入队')}
+              >
+                全部重试
+              </button>
+              <button
+                type="button"
+                class="ghost danger"
+                disabled={busy || trashItems.length === 0}
+                onclick={() =>
+                  void run(async () => {
+                    await clearOutboxTrashApi();
+                    trashItems = [];
+                    showTrash = false;
+                  }, '垃圾桶已清空')}
+              >
+                清空
+              </button>
+            </div>
+          </div>
+          {#if trashItems.length === 0}
+            <p class="hint">暂无永久失败的消息</p>
+          {:else}
+            <ul class="trash-list">
+              {#each trashItems as item (item.id)}
+                <li>
+                  <div class="trash-item">
+                    <strong>{item.platform}/{item.videoId}</strong>
+                    <span>{previewBody(item.body)}</span>
+                    {#if item.lastError}
+                      <span class="trash-err">{item.lastError}</span>
+                    {/if}
+                  </div>
+                  <button
+                    type="button"
+                    class="ghost"
+                    disabled={busy}
+                    onclick={() =>
+                      void run(async () => {
+                        await retryOutboxTrashApi([item.id]);
+                        trashItems = await listOutboxTrash();
+                      }, '已重新入队')}
+                  >
+                    重试
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+
       {#each backends as backend (backend.id)}
         <label class="check">
           <input
@@ -589,6 +705,100 @@
     font-size: 12px;
     font-weight: 600;
     color: #e6a23c;
+  }
+
+  .trash-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    color: var(--sc-faint, #9499a0);
+  }
+
+  .trash-btn:hover,
+  .trash-btn.has-items {
+    color: #c4564e;
+    background: #fff0f0;
+  }
+
+  .trash-btn svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .trash-count {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #f85a54;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+  }
+
+  .trash-panel {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #f0c4c0;
+  }
+
+  .trash-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #c4564e;
+  }
+
+  .trash-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+
+  .trash-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .trash-item {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--sc-muted, #61666d);
+  }
+
+  .trash-item strong {
+    color: var(--sc-ink, #18191c);
+    font-weight: 600;
+  }
+
+  .trash-err {
+    color: #c4564e;
+    word-break: break-all;
   }
 
   .field {
