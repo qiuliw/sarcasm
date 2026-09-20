@@ -51,6 +51,9 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
+    // 阻止冒泡到宿主页（否则会触发抖音/B站快捷键）
+    e.stopPropagation();
+
     if (e.key === 'Enter') {
       e.preventDefault();
       void submit();
@@ -61,6 +64,10 @@
       e.preventDefault();
       if (replyMode) onClearTarget();
     }
+  }
+
+  function trapKey(e: KeyboardEvent) {
+    e.stopPropagation();
   }
 
   function cancelReply() {
@@ -91,6 +98,8 @@
       {disabled}
       oninput={(e) => (body = e.currentTarget.value)}
       onkeydown={onKeydown}
+      onkeyup={trapKey}
+      onkeypress={trapKey}
     />
     <button
       type="button"

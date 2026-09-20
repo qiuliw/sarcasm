@@ -49,6 +49,7 @@
   let stopNav: (() => void) | null = null;
   let highlightTimer: number | undefined;
   let stopStorage: (() => void) | null = null;
+  let stopKeyTrap: (() => void) | null = null;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
   async function setOpen(value: boolean) {
     open = value;
@@ -90,6 +91,35 @@
       return;
     }
     void setOpen(false);
+  }
+
+  /** 面板内按键不冒泡到宿主页，避免抖音/B站快捷键 */
+  function stopPanelKeyBubble(event: KeyboardEvent) {
+    event.stopPropagation();
+  }
+
+  /**
+   * 部分站点在 document 捕获阶段听快捷键，须在 window 捕获阶段先拦住。
+   * 不 preventDefault（除 Enter），以免打字失效。
+   */
+  function trapPageShortcuts(event: KeyboardEvent) {
+    if (!open) return;
+    const path = event.composedPath();
+    const root = path.find(
+      (n): n is HTMLElement => n instanceof HTMLElement && n.classList.contains('root'),
+    );
+    if (!root) return;
+
+    const t = event.target;
+    if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+
+    event.stopPropagation();
+
+    if (event.type !== 'keydown') return;
+    if (event.key === 'Enter' && t instanceof HTMLInputElement) {
+      event.preventDefault();
+      root.querySelector<HTMLButtonElement>('.composer button.send:not(:disabled)')?.click();
+    }
   }
 
   function toggleSettings() {
@@ -245,6 +275,14 @@
     void refreshOutbox();
     void refreshPacks().then(() => refreshContext());
     window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('keydown', trapPageShortcuts, true);
+    window.addEventListener('keyup', trapPageShortcuts, true);
+    window.addEventListener('keypress', trapPageShortcuts, true);
+    stopKeyTrap = () => {
+      window.removeEventListener('keydown', trapPageShortcuts, true);
+      window.removeEventListener('keyup', trapPageShortcuts, true);
+      window.removeEventListener('keypress', trapPageShortcuts, true);
+    };
     const onStorage = (changes: Record<string, unknown>, area: string) => {
       if (area !== 'local') return;
       void refreshIdentity();
@@ -266,6 +304,7 @@
     }
     stopNav?.();
     stopStorage?.();
+    stopKeyTrap?.();
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
@@ -292,7 +331,13 @@
       {/if}
     </button>
   {:else}
-    <aside class="panel" class:panel-empty={!hasComments && !loading && !inSettings}>
+    <aside
+      class="panel"
+      class:panel-empty={!hasComments && !loading && !inSettings}
+      onkeydown={stopPanelKeyBubble}
+      onkeyup={stopPanelKeyBubble}
+      onkeypress={stopPanelKeyBubble}
+    >
       <header class="head">
         <div class="context">
           {#if inSettings}
