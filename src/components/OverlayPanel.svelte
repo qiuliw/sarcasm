@@ -285,9 +285,6 @@
           d="M5 5.75A2.75 2.75 0 0 1 7.75 3h8.5A2.75 2.75 0 0 1 19 5.75v6.5A2.75 2.75 0 0 1 16.25 15H11l-4.35 3.48A1 1 0 0 1 5 17.7V15.1a2.75 2.75 0 0 1-2-2.65v-6.7Z"
         />
       </svg>
-      {#if outboxPending > 0}
-        <span class="fab-dot" title={`待同步 ${outboxPending}`} aria-label={`待同步 ${outboxPending}`}></span>
-      {/if}
       {#if commentCount > 0}
         <span class="fab-count">{commentCount > 99 ? '99+' : commentCount}</span>
       {/if}
@@ -525,18 +522,6 @@
     border: 1px solid var(--sc-accent-soft);
     font-size: 10px;
     font-weight: 700;
-  }
-
-  .fab-dot {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #e6a23c;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgb(230 162 60 / 35%);
   }
 
   .gear-dot {
