@@ -162,11 +162,8 @@
   {/if}
 
   <section class="card">
-    <h2>身份</h2>
-    <p class="mono" class:muted={!identity?.configured}>{identityLabel}</p>
-
-    <label class="field">
-      <span>显示名</span>
+    <h2>显示名</h2>
+    <div class="inline-row">
       <input
         type="text"
         maxlength="32"
@@ -176,7 +173,24 @@
           if (settings) settings.displayName = e.currentTarget.value;
         }}
       />
-    </label>
+      <button
+        type="button"
+        class="save-sm"
+        disabled={busy || !settings}
+        onclick={() =>
+          void run(async () => {
+            if (!settings) return;
+            await saveNostrSettingsApi(settings);
+          }, '显示名已保存')}
+      >
+        保存
+      </button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>密钥</h2>
+    <p class="mono" class:muted={!identity?.configured}>{identityLabel}</p>
 
     <div class="actions">
       <button
@@ -485,6 +499,23 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  .inline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .inline-row input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .save-sm {
+    flex-shrink: 0;
+    padding: 7px 10px;
+    font-size: 12px;
   }
 
   .pack-list {

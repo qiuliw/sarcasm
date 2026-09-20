@@ -282,7 +282,7 @@
             <div class="context-line">
               <strong class="title">设置</strong>
             </div>
-            <span class="vid">身份 · 同步 · 锚点</span>
+            <span class="vid">显示名 · 密钥 · 同步 · 锚点</span>
           {:else if context}
             <div class="context-line">
               <strong class="title" title={context.title || context.videoId}>
