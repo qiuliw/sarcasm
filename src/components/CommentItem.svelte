@@ -184,7 +184,7 @@
     padding: 12px 0;
     border-bottom: 1px solid var(--sc-line);
     border-radius: 6px;
-    transition: background 0.4s ease;
+    transition: background 0.25s ease;
   }
 
   .item:last-child {
