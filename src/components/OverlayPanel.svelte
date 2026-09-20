@@ -288,7 +288,7 @@
         {:else if !context}
           <p class="empty">打开具体视频页后再说</p>
         {:else if !hasComments}
-          <p class="empty">还没有评论，来说两句吧</p>
+          <p class="empty">还没有评论。可以直接说两句，或点原评论旁的「外评」挂靠回复。</p>
         {:else}
           {#if forest.videoRoots.length}
             <section class="section">
@@ -443,6 +443,19 @@
     box-shadow: var(--sc-shadow);
     overflow: hidden;
     transition: box-shadow 180ms ease;
+  }
+
+  @media (max-height: 720px) {
+    .panel {
+      bottom: 16px;
+      right: 12px;
+      max-height: calc(100vh - 24px);
+    }
+
+    .fab {
+      bottom: 16px;
+      right: 12px;
+    }
   }
 
   .panel-empty {

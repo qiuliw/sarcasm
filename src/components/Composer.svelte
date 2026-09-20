@@ -259,6 +259,7 @@
     font-size: 13px;
     line-height: 1.5;
     outline: none;
+    field-sizing: content;
   }
 
   textarea:disabled {

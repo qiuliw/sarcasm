@@ -65,6 +65,12 @@
   function cancelDelete() {
     confirmDelete = false;
   }
+
+  const deleteLabel = $derived(
+    showReplies && node.children.length > 0
+      ? `确认删除（含 ${node.children.length} 条回复）`
+      : '确认删除',
+  );
 </script>
 
 <article class="item" class:reply={!showReplies} class:flash={highlighted} data-id={node.id}>
@@ -84,7 +90,7 @@
       <footer>
         <button type="button" onclick={() => onReply(node)}>回复</button>
         {#if confirmDelete}
-          <button type="button" class="danger" onclick={requestDelete}>确认删除</button>
+          <button type="button" class="danger" onclick={requestDelete}>{deleteLabel}</button>
           <button type="button" onclick={cancelDelete}>取消</button>
         {:else}
           <button type="button" class="danger" onclick={requestDelete}>删除</button>
