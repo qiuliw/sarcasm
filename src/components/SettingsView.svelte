@@ -36,6 +36,7 @@
   let exportedNsec = $state('');
   let showExport = $state(false);
   let showImport = $state(false);
+  let showSync = $state(false);
   let rulesPanel = $state<'export' | 'import' | null>(null);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
   let status = $state('');
@@ -291,64 +292,77 @@
   </section>
 
   <section class="card">
-    <h2>同步</h2>
-    {#if outboxPending > 0}
-      <p class="pending">待同步 {outboxPending}</p>
-    {/if}
-    {#each backends as backend (backend.id)}
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={enabledBackends.includes(backend.id)}
-          onchange={(e) => toggleBackend(backend.id, e.currentTarget.checked)}
-        />
-        {backend.name}
-      </label>
-    {/each}
-
-    {#if enabledBackends.includes('nostr')}
-      <label class="field">
-        <span>Relay</span>
-        <textarea rows={compact ? 3 : 4} bind:value={relayText}></textarea>
-      </label>
-      <p class="hint">配 1 个需成功 1 个；配多个至少成功 2 个。</p>
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={settings?.publishEnabled ?? true}
-          onchange={(e) => {
-            if (settings) settings.publishEnabled = e.currentTarget.checked;
-          }}
-        />
-        发评同步
-      </label>
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={settings?.asyncPublish ?? true}
-          onchange={(e) => {
-            if (settings) settings.asyncPublish = e.currentTarget.checked;
-          }}
-        />
-        后台异步（不阻塞发评，失败自动重试）
-      </label>
-    {/if}
-
     <button
       type="button"
-      disabled={busy || !settings}
-      onclick={() =>
-        void run(async () => {
-          if (!settings) return;
-          await setEnabledBackends(enabledBackends);
-          await saveNostrSettingsApi({
-            ...settings,
-            relays: parseRelays(relayText),
-          });
-        })}
+      class="card-toggle"
+      onclick={() => (showSync = !showSync)}
+      aria-expanded={showSync}
     >
-      保存
+      <h2>同步</h2>
+      <span class="toggle-meta">
+        {#if outboxPending > 0}
+          <span class="pending">待同步 {outboxPending}</span>
+        {/if}
+        <span class="chevron" class:open={showSync}>›</span>
+      </span>
     </button>
+
+    {#if showSync}
+      {#each backends as backend (backend.id)}
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={enabledBackends.includes(backend.id)}
+            onchange={(e) => toggleBackend(backend.id, e.currentTarget.checked)}
+          />
+          {backend.name}
+        </label>
+      {/each}
+
+      {#if enabledBackends.includes('nostr')}
+        <label class="field">
+          <span>Relay</span>
+          <textarea rows={compact ? 3 : 4} bind:value={relayText}></textarea>
+        </label>
+        <p class="hint">配 1 个需成功 1 个；配多个至少成功 2 个。</p>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={settings?.publishEnabled ?? true}
+            onchange={(e) => {
+              if (settings) settings.publishEnabled = e.currentTarget.checked;
+            }}
+          />
+          发评同步
+        </label>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={settings?.asyncPublish ?? true}
+            onchange={(e) => {
+              if (settings) settings.asyncPublish = e.currentTarget.checked;
+            }}
+          />
+          后台异步（不阻塞发评，失败自动重试）
+        </label>
+      {/if}
+
+      <button
+        type="button"
+        disabled={busy || !settings}
+        onclick={() =>
+          void run(async () => {
+            if (!settings) return;
+            await setEnabledBackends(enabledBackends);
+            await saveNostrSettingsApi({
+              ...settings,
+              relays: parseRelays(relayText),
+            });
+          })}
+      >
+        保存
+      </button>
+    {/if}
   </section>
 
   <section class="card">
@@ -472,6 +486,42 @@
     font-size: 13px;
     font-weight: 600;
     color: var(--sc-ink, #18191c);
+  }
+
+  .card-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .toggle-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .chevron {
+    display: inline-block;
+    color: var(--sc-faint, #9499a0);
+    font-size: 16px;
+    line-height: 1;
+    transform: rotate(90deg);
+    transition: transform 140ms ease;
+  }
+
+  .chevron.open {
+    transform: rotate(-90deg);
   }
 
   .hint {
