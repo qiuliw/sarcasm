@@ -17,7 +17,7 @@ export default defineConfig({
     },
     name: 'sarcasm',
     description: '抖音 / B站外挂评论：Nostr 身份，本地存储并可同步到 relay',
-    permissions: ['storage'],
+    permissions: ['storage', 'alarms'],
     host_permissions: [
       '*://*.bilibili.com/*',
       '*://*.douyin.com/*',

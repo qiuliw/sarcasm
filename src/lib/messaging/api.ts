@@ -19,6 +19,7 @@ export type BgRequest =
   | { type: 'delete_comment'; id: string }
   | { type: 'vote_comment'; input: VoteCommentInput }
   | { type: 'stats' }
+  | { type: 'outbox_pending' }
   | { type: 'nostr_identity' }
   | { type: 'nostr_get_settings' }
   | { type: 'nostr_save_settings'; settings: NostrSettings }
@@ -68,6 +69,10 @@ export function voteComment(id: string, vote: VoteKind): Promise<CommentRecord> 
 
 export function getStats(): Promise<{ count: number }> {
   return sendBg({ type: 'stats' });
+}
+
+export function getOutboxPending(): Promise<{ count: number }> {
+  return sendBg({ type: 'outbox_pending' });
 }
 
 /** content script 没有 openOptionsPage，统一走 background */

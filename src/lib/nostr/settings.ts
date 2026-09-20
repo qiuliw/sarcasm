@@ -21,6 +21,8 @@ export interface NostrSettings {
   displayName: string;
   relays: string[];
   publishEnabled: boolean;
+  /** 同步走后台队列，不阻塞发评 */
+  asyncPublish: boolean;
 }
 
 export interface NostrIdentity {
@@ -31,6 +33,7 @@ export interface NostrIdentity {
   shortLabel: string;
   displayName: string;
   publishEnabled: boolean;
+  asyncPublish: boolean;
   relays: string[];
 }
 
@@ -53,6 +56,7 @@ export function defaultNostrSettings(): NostrSettings {
     displayName: '',
     relays: [...DEFAULT_RELAYS],
     publishEnabled: true,
+    asyncPublish: true,
   };
 }
 
@@ -72,6 +76,7 @@ export async function loadNostrSettings(): Promise<NostrSettings> {
       : '',
     relays: normalizeRelays(raw.relays),
     publishEnabled: raw.publishEnabled !== false,
+    asyncPublish: raw.asyncPublish !== false,
   };
 }
 
@@ -82,6 +87,7 @@ export async function saveNostrSettings(next: NostrSettings): Promise<NostrSetti
     displayName: nsec ? normalizeName(next.displayName) : '',
     relays: normalizeRelays(next.relays),
     publishEnabled: Boolean(next.publishEnabled),
+    asyncPublish: next.asyncPublish !== false,
   };
   await browser.storage.local.set({ [SETTINGS_KEY]: settings });
   return settings;
@@ -144,6 +150,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       shortLabel: '未配置',
       displayName: '',
       publishEnabled: settings.publishEnabled,
+      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   }
@@ -159,6 +166,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       shortLabel: displayName || '我',
       displayName,
       publishEnabled: settings.publishEnabled,
+      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   } catch {
@@ -169,6 +177,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       shortLabel: '密钥无效',
       displayName: '',
       publishEnabled: settings.publishEnabled,
+      asyncPublish: settings.asyncPublish,
       relays: settings.relays,
     };
   }

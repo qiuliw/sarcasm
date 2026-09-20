@@ -13,6 +13,13 @@ import {
   saveEnabledBackends,
 } from '../lib/backends/dispatch';
 import {
+  enqueueOutbound,
+  ensureOutboxAlarm,
+  flushOutbox,
+  isOutboxAlarm,
+  outboxPendingCount,
+} from '../lib/backends/outbox';
+import {
   exportPacksJson,
   importPacksJson,
   loadAllPacks,
@@ -33,6 +40,17 @@ import {
 export default defineBackground(() => {
   void ensureDb().catch((err) => {
     console.error('[sarcasm] sqlite init failed', err);
+  });
+
+  void ensureOutboxAlarm().then(() => flushOutbox()).catch((err) => {
+    console.warn('[sarcasm] outbox boot flush failed', err);
+  });
+
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (!isOutboxAlarm(alarm.name)) return;
+    void flushOutbox().catch((err) => {
+      console.warn('[sarcasm] outbox alarm flush failed', err);
+    });
   });
 
   browser.runtime.onMessage.addListener((message: BgRequest): Promise<BgResponse> => {
@@ -62,16 +80,29 @@ async function handle(message: BgRequest): Promise<BgResponse> {
         ...message.input,
         author: message.input.author || identity.shortLabel,
       });
-      const results = await publishOutbound({
+
+      const payload = {
+        commentId: record.id,
         platform: record.platform,
         videoId: record.videoId,
         body: record.body,
         parentId: record.parentId,
         pageUrl: message.input.pageUrl,
-      });
-      for (const r of results) {
-        if (!r.ok) console.warn(`[sarcasm] backend ${r.id} failed`, r.error);
+      };
+
+      const settings = await loadNostrSettings();
+      if (settings.asyncPublish) {
+        await enqueueOutbound(payload);
+        void flushOutbox().catch((err) => {
+          console.warn('[sarcasm] outbox flush failed', err);
+        });
+      } else {
+        const results = await publishOutbound(payload);
+        for (const r of results) {
+          if (!r.ok) console.warn(`[sarcasm] backend ${r.id} failed`, r.error);
+        }
       }
+
       return { ok: true, data: record };
     }
     case 'delete_comment':
@@ -81,6 +112,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await voteComment(message.input) };
     case 'stats':
       return { ok: true, data: { count: await countAll() } };
+    case 'outbox_pending':
+      return { ok: true, data: { count: await outboxPendingCount() } };
     case 'nostr_identity':
       return { ok: true, data: await loadNostrIdentity() };
     case 'nostr_get_settings':

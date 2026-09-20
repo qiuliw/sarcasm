@@ -32,7 +32,7 @@ export async function publishCommentToNostr(
     return { ok: false, error: '未配置 Nostr 密钥', accepted: 0 };
   }
   if (!settings.publishEnabled) {
-    return { ok: false, error: '已关闭 Nostr 发布', accepted: 0 };
+    return { ok: true, accepted: 0 };
   }
   if (!settings.relays.length) {
     return { ok: false, error: '未配置 relay', accepted: 0 };

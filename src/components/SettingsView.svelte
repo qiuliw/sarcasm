@@ -317,6 +317,16 @@
         />
         发评同步
       </label>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings?.asyncPublish ?? true}
+          onchange={(e) => {
+            if (settings) settings.asyncPublish = e.currentTarget.checked;
+          }}
+        />
+        后台异步（不阻塞发评，失败自动重试）
+      </label>
     {/if}
 
     <button
