@@ -6,6 +6,8 @@
 
 技术栈：**WXT（MV3）+ Svelte 5 + sql.js**。评论按视频 ID 挂载，经 Nostr relay 同步。
 
+<img width="693" height="719" alt="image" src="https://github.com/user-attachments/assets/917641e6-bb6e-490e-8343-c55639557798" />
+
 ## 功能
 
 - 视频页右下角悬浮评论面板
