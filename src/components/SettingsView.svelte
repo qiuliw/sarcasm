@@ -34,7 +34,7 @@
   let exportedNsec = $state('');
   let showExport = $state(false);
   let showImport = $state(false);
-  let showRulesImport = $state(false);
+  let rulesPanel = $state<'export' | 'import' | null>(null);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
   let status = $state('');
   let error = $state('');
@@ -120,14 +120,24 @@
     error = '';
     status = '';
     try {
-      const json = await exportAnchorPacks(true);
-      packJson = json;
-      await copyText(json, '已复制到剪贴板');
+      packJson = await exportAnchorPacks(true);
+      rulesPanel = 'export';
+      status = '已导出';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
     }
+  }
+
+  function toggleRulesImport() {
+    if (rulesPanel === 'import') {
+      rulesPanel = null;
+      packJson = '';
+      return;
+    }
+    rulesPanel = 'import';
+    packJson = '';
   }
 
   onMount(() => {
@@ -312,18 +322,21 @@
       {/each}
     </ul>
     <div class="actions">
-      <button type="button" class="ghost" disabled={busy} onclick={() => void exportRules()}>
+      <button
+        type="button"
+        class="ghost"
+        class:active={rulesPanel === 'export'}
+        disabled={busy}
+        onclick={() => void exportRules()}
+      >
         导出
       </button>
       <button
         type="button"
         class="ghost"
-        class:active={showRulesImport}
+        class:active={rulesPanel === 'import'}
         disabled={busy}
-        onclick={() => {
-          showRulesImport = !showRulesImport;
-          if (!showRulesImport) packJson = '';
-        }}
+        onclick={toggleRulesImport}
       >
         导入
       </button>
@@ -331,12 +344,30 @@
         type="button"
         class="ghost"
         disabled={busy || customCount === 0}
-        onclick={() => void run(async () => clearCustomAnchorPacks(), '已重置')}
+        onclick={() =>
+          void run(async () => {
+            rulesPanel = null;
+            packJson = '';
+            await clearCustomAnchorPacks();
+          }, '已重置')}
       >
         重置
       </button>
     </div>
-    {#if showRulesImport}
+    {#if rulesPanel === 'export'}
+      <label class="field">
+        <span>JSON</span>
+        <textarea rows={compact ? 4 : 6} readonly value={packJson}></textarea>
+      </label>
+      <button
+        type="button"
+        class="ghost"
+        disabled={busy || !packJson.trim()}
+        onclick={() => void copyText(packJson, '已复制到剪贴板')}
+      >
+        复制
+      </button>
+    {:else if rulesPanel === 'import'}
       <label class="field">
         <span>JSON</span>
         <textarea
@@ -352,7 +383,7 @@
           void run(async () => {
             await importAnchorPacks(packJson);
             packJson = '';
-            showRulesImport = false;
+            rulesPanel = null;
           }, '已导入')}
       >
         确认导入
