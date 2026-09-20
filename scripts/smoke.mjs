@@ -53,6 +53,7 @@ async function runCrud(page) {
 
   const anchorExport = await send(page, { type: 'anchors_export' });
   assert(anchorExport?.ok && anchorExport.data.includes('"bilibili"'), 'anchor export failed');
+  assert(!anchorExport.data.includes('"tests"'), 'anchor export leaked internal fixtures');
   const anchorImport = await send(page, {
     type: 'anchors_import',
     json: JSON.stringify({

@@ -134,8 +134,26 @@ describe('nostr pull parse', () => {
 
 describe('anchor rules', () => {
   test('built-in fixtures stay valid', () => {
-    for (const pack of BUILTIN_PACKS) {
-      expect(validatePack(pack).id).toBe(pack.id);
+    const fixtures = [
+      {
+        packId: 'bilibili',
+        url: 'https://www.bilibili.com/video/BV1GJ411x7h7/',
+        expectedId: 'BV1GJ411x7h7',
+      },
+      {
+        packId: 'douyin',
+        url: 'https://www.douyin.com/video/7123456789012345678',
+        expectedId: '7123456789012345678',
+      },
+      {
+        packId: 'douyin',
+        url: 'https://www.douyin.com/jingxuan?modal_id=7654524171870899499',
+        expectedId: '7654524171870899499',
+      },
+    ];
+    for (const fixture of fixtures) {
+      const pack = BUILTIN_PACKS.find((item) => item.id === fixture.packId)!;
+      expect(extractVideoId(pack, new URL(fixture.url))).toBe(fixture.expectedId);
     }
   });
 
@@ -170,7 +188,6 @@ describe('anchor rules', () => {
       hosts: ['example.com'],
       videoIdRules: [{ from: 'query', queryKey: 'video', pattern: '^(\\d+)$' }],
       aliases: { '9001': '42' },
-      tests: [{ url: 'https://example.com/watch?video=9001', expectedId: '42' }],
     });
     expect(
       extractVideoId(pack, new URL('https://example.com/watch?video=9001')),

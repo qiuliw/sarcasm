@@ -13,11 +13,6 @@ export interface VideoIdRule {
   prefix?: string;
 }
 
-export interface AnchorRuleFixture {
-  url: string;
-  expectedId: string;
-}
-
 export interface AnchorPack {
   id: string;
   name: string;
@@ -28,8 +23,6 @@ export interface AnchorPack {
   videoIdRules: VideoIdRule[];
   /** 平台 ID 改变时，将新提取值映射到原规范 ID。 */
   aliases?: Record<string, string>;
-  /** 导入时自动执行的规则样例。 */
-  tests?: AnchorRuleFixture[];
 }
 
 export interface AnchorRulesDocument {
@@ -48,12 +41,6 @@ export const BUILTIN_PACKS: AnchorPack[] = [
       { from: 'query', queryKey: 'bvid', pattern: '^(BV[\\w]+)$' },
       { from: 'path', pattern: '/video/av(\\d+)', prefix: 'av' },
     ],
-    tests: [
-      {
-        url: 'https://www.bilibili.com/video/BV1GJ411x7h7/',
-        expectedId: 'BV1GJ411x7h7',
-      },
-    ],
   },
   {
     id: 'douyin',
@@ -62,16 +49,6 @@ export const BUILTIN_PACKS: AnchorPack[] = [
     videoIdRules: [
       { from: 'path', pattern: '/video/(\\d+)' },
       { from: 'query', queryKey: 'modal_id', pattern: '^(\\d+)$' },
-    ],
-    tests: [
-      {
-        url: 'https://www.douyin.com/video/7123456789012345678',
-        expectedId: '7123456789012345678',
-      },
-      {
-        url: 'https://www.douyin.com/jingxuan?modal_id=7654524171870899499',
-        expectedId: '7654524171870899499',
-      },
     ],
   },
 ];
@@ -149,23 +126,7 @@ export function validatePack(raw: unknown): AnchorPack {
             .map(([from, to]) => [from.slice(0, 256), to.slice(0, 256)]),
         )
       : undefined;
-  const tests = Array.isArray(pack.tests)
-    ? pack.tests.map((rawTest) => {
-        if (!rawTest || typeof rawTest !== 'object') throw new Error('测试项无效');
-        const test = rawTest as Partial<AnchorRuleFixture>;
-        if (typeof test.url !== 'string' || !test.url) throw new Error('测试缺少 url');
-        if (typeof test.expectedId !== 'string' || !test.expectedId) {
-          throw new Error('测试缺少 expectedId');
-        }
-        new URL(test.url);
-        return {
-          url: test.url,
-          expectedId: test.expectedId,
-        };
-      })
-    : undefined;
-
-  const cleaned: AnchorPack = {
+  return {
     id: pack.id,
     name: pack.name.slice(0, 64),
     hosts: pack.hosts.map(String).filter(Boolean),
@@ -174,18 +135,7 @@ export function validatePack(raw: unknown): AnchorPack {
       : undefined,
     videoIdRules: rules,
     aliases,
-    tests,
   };
-
-  for (const test of cleaned.tests ?? []) {
-    const url = new URL(test.url);
-    if (!packMatches(cleaned, url)) throw new Error(`测试 URL 不匹配规则：${test.url}`);
-    const actual = extractVideoId(cleaned, url);
-    if (actual !== test.expectedId) {
-      throw new Error(`规则测试失败：期望 ${test.expectedId}，实际 ${actual ?? '空'}`);
-    }
-  }
-  return cleaned;
 }
 
 export function parseRulesDocument(raw: unknown): AnchorRulesDocument {
