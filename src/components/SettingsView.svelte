@@ -402,12 +402,6 @@
     word-break: break-all;
   }
 
-  .hint {
-    margin: 0;
-    font-size: 12px;
-    color: var(--sc-faint, #9499a0);
-  }
-
   .field {
     display: grid;
     gap: 5px;
