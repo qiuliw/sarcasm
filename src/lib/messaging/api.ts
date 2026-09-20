@@ -24,6 +24,7 @@ export type BgRequest =
   | { type: 'nostr_save_settings'; settings: NostrSettings }
   | { type: 'nostr_generate_key' }
   | { type: 'nostr_import_key'; nsec: string }
+  | { type: 'nostr_export_key' }
   | { type: 'nostr_clear_key' }
   | { type: 'backends_get' }
   | { type: 'backends_set'; ids: BackendId[] }
@@ -91,6 +92,10 @@ export function generateNostrKeyApi(): Promise<NostrSettings> {
 
 export function importNostrKeyApi(nsec: string): Promise<NostrSettings> {
   return sendBg({ type: 'nostr_import_key', nsec });
+}
+
+export function exportNostrKeyApi(): Promise<string> {
+  return sendBg({ type: 'nostr_export_key' });
 }
 
 export function clearNostrKeyApi(): Promise<NostrSettings> {

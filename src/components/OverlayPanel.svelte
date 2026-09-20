@@ -286,7 +286,7 @@
             {/if}
           </div>
           {#if inSettings}
-            <span class="vid">身份 · 事件源 · 锚点</span>
+            <span class="vid">身份 · 同步 · 规则</span>
           {:else if context}
             <span class="vid" title={context.title || context.videoId}>
               {platformLabel}

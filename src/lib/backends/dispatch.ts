@@ -19,10 +19,13 @@ export interface BackendResult {
 const BACKENDS_KEY = 'sarcasm_event_backends_v1';
 
 export const BACKEND_META: Array<{ id: BackendId; name: string; ready: boolean }> = [
-  { id: 'nostr', name: 'Nostr 联邦 relay', ready: true },
-  { id: 'p2p', name: 'P2P 全分布式（预留）', ready: false },
+  { id: 'nostr', name: 'Nostr', ready: true },
+  { id: 'p2p', name: 'P2P', ready: false },
 ];
 
+export function availableBackends() {
+  return BACKEND_META.filter((b) => b.ready);
+}
 export async function loadEnabledBackends(): Promise<BackendId[]> {
   const stored = await browser.storage.local.get(BACKENDS_KEY);
   const raw = stored[BACKENDS_KEY];
@@ -61,7 +64,7 @@ export async function publishOutbound(event: OutboundComment): Promise<BackendRe
       continue;
     }
     if (id === 'p2p') {
-      results.push({ id, ok: false, error: 'P2P 源尚未接入' });
+      results.push({ id, ok: false, error: 'unavailable' });
     }
   }
 

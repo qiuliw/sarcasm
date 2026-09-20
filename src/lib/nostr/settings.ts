@@ -98,6 +98,12 @@ export async function clearNostrKey(): Promise<NostrSettings> {
   return saveNostrSettings({ ...current, nsec: null });
 }
 
+export async function exportNostrKey(): Promise<string> {
+  const settings = await loadNostrSettings();
+  if (!settings.nsec) throw new Error('尚未配置密钥');
+  return settings.nsec;
+}
+
 export function identityFromSettings(settings: NostrSettings): NostrIdentity {
   if (!settings.nsec) {
     return {

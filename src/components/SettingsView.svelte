@@ -4,6 +4,7 @@
     clearCustomAnchorPacks,
     clearNostrKeyApi,
     exportAnchorPacks,
+    exportNostrKeyApi,
     generateNostrKeyApi,
     getEnabledBackends,
     getNostrSettings,
@@ -20,7 +21,7 @@
   } from '../lib/nostr/settings';
   import { shortNpub } from '../lib/nostr/keys';
   import type { AnchorPack } from '../lib/anchors/packs';
-  import { BACKEND_META, type BackendId } from '../lib/backends/dispatch';
+  import { availableBackends, type BackendId } from '../lib/backends/dispatch';
 
   interface Props {
     compact?: boolean;
@@ -31,6 +32,8 @@
 
   let settings = $state<NostrSettings | null>(null);
   let nsecInput = $state('');
+  let exportedNsec = $state('');
+  let showExport = $state(false);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
   let showNsec = $state(false);
   let status = $state('');
@@ -42,6 +45,7 @@
   let packJson = $state('');
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
+  const backends = availableBackends();
 
   async function refresh() {
     settings = await getNostrSettings();
@@ -61,25 +65,49 @@
   }
 
   function toggleBackend(id: BackendId, on: boolean) {
-    const meta = BACKEND_META.find((b) => b.id === id);
-    if (!meta?.ready) return;
     if (on) enabledBackends = [...new Set([...enabledBackends, id])];
     else enabledBackends = enabledBackends.filter((x) => x !== id);
   }
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, okMessage = '已保存') {
     busy = true;
     error = '';
     status = '';
     try {
       await action();
       await refresh();
-      status = '已保存';
+      status = okMessage;
       onSaved?.();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
+    }
+  }
+
+  async function exportKey() {
+    busy = true;
+    error = '';
+    status = '';
+    try {
+      exportedNsec = await exportNostrKeyApi();
+      showExport = true;
+      status = '密钥已导出';
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function copyExported() {
+    if (!exportedNsec) return;
+    try {
+      await navigator.clipboard.writeText(exportedNsec);
+      status = '已复制到剪贴板';
+      error = '';
+    } catch {
+      error = '复制失败，请手动选中复制';
     }
   }
 
@@ -94,7 +122,7 @@
   {#if !compact}
     <header class="intro">
       <h1>设置</h1>
-      <p>身份、事件源、锚点规则。</p>
+      <p>身份、同步与站点规则。</p>
     </header>
   {/if}
 
@@ -108,17 +136,16 @@
     <h2>身份</h2>
     {#if identity?.configured && identity.npub}
       <p class="mono" title={identity.npub}>{shortNpub(identity.npub)}</p>
-      <p class="hint">私钥切勿泄露。</p>
     {:else}
-      <p class="hint">尚未配置密钥，无法发评。</p>
+      <p class="hint">创建密钥后即可发评。</p>
     {/if}
 
     <label class="field">
-      <span>显示名（可选）</span>
+      <span>显示名</span>
       <input
         type="text"
         maxlength="32"
-        placeholder="不填则显示短 npub"
+        placeholder="可选，默认短公钥"
         value={settings?.displayName ?? ''}
         oninput={(e) => {
           if (settings) settings.displayName = e.currentTarget.value;
@@ -130,22 +157,50 @@
       <button
         type="button"
         disabled={busy}
-        onclick={() => void run(async () => generateNostrKeyApi())}
+        onclick={() =>
+          void run(async () => {
+            exportedNsec = '';
+            showExport = false;
+            await generateNostrKeyApi();
+          }, '密钥已生成')}
       >
-        生成新密钥
+        生成密钥
       </button>
       <button
         type="button"
         class="ghost"
         disabled={busy || !identity?.configured}
-        onclick={() => void run(async () => clearNostrKeyApi())}
+        onclick={() => void exportKey()}
       >
-        清除密钥
+        导出密钥
+      </button>
+      <button
+        type="button"
+        class="ghost"
+        disabled={busy || !identity?.configured}
+        onclick={() =>
+          void run(async () => {
+            exportedNsec = '';
+            showExport = false;
+            await clearNostrKeyApi();
+          }, '密钥已清除')}
+      >
+        清除
       </button>
     </div>
 
+    {#if showExport && exportedNsec}
+      <label class="field">
+        <span>私钥 nsec</span>
+        <input type="text" readonly value={exportedNsec} />
+      </label>
+      <button type="button" class="ghost" disabled={busy} onclick={() => void copyExported()}>
+        复制密钥
+      </button>
+    {/if}
+
     <label class="field">
-      <span>导入 nsec</span>
+      <span>导入密钥</span>
       <input
         type={showNsec ? 'text' : 'password'}
         placeholder="nsec1…"
@@ -155,7 +210,7 @@
     </label>
     <label class="check">
       <input type="checkbox" bind:checked={showNsec} />
-      显示私钥
+      显示内容
     </label>
     <button
       type="button"
@@ -164,30 +219,30 @@
         void run(async () => {
           await importNostrKeyApi(nsecInput);
           nsecInput = '';
-        })}
+          exportedNsec = '';
+          showExport = false;
+        }, '密钥已导入')}
     >
-      导入密钥
+      导入
     </button>
   </section>
 
   <section class="card">
-    <h2>事件源</h2>
-    <p class="hint">本地始终写入；下面是额外同步。</p>
-    {#each BACKEND_META as backend (backend.id)}
+    <h2>同步</h2>
+    {#each backends as backend (backend.id)}
       <label class="check">
         <input
           type="checkbox"
-          disabled={!backend.ready}
           checked={enabledBackends.includes(backend.id)}
           onchange={(e) => toggleBackend(backend.id, e.currentTarget.checked)}
         />
-        {backend.name}{backend.ready ? '' : '（未接入）'}
+        {backend.name}
       </label>
     {/each}
 
     {#if enabledBackends.includes('nostr')}
       <label class="field">
-        <span>Nostr Relays（每行一个）</span>
+        <span>Relay</span>
         <textarea rows={compact ? 3 : 4} bind:value={relayText}></textarea>
       </label>
       <label class="check">
@@ -198,7 +253,7 @@
             if (settings) settings.publishEnabled = e.currentTarget.checked;
           }}
         />
-        Nostr 发布开关
+        发评时同步到 Nostr
       </label>
     {/if}
 
@@ -215,15 +270,12 @@
           });
         })}
     >
-      保存事件源
+      保存
     </button>
   </section>
 
   <section class="card">
-    <h2>锚点规则</h2>
-    <p class="hint">
-      {packs.length} 套（自定义 {customCount}）
-    </p>
+    <h2>站点规则</h2>
     <ul class="pack-list">
       {#each packs as pack (pack.id)}
         <li>
@@ -240,7 +292,7 @@
         onclick={() =>
           void run(async () => {
             packJson = await exportAnchorPacks(true);
-          })}
+          }, '已导出')}
       >
         导出
       </button>
@@ -248,25 +300,25 @@
         type="button"
         class="ghost"
         disabled={busy || customCount === 0}
-        onclick={() => void run(async () => clearCustomAnchorPacks())}
+        onclick={() => void run(async () => clearCustomAnchorPacks(), '已清空')}
       >
-        清空自定义
+        重置
       </button>
     </div>
     <label class="field">
-      <span>导入 JSON</span>
+      <span>导入</span>
       <textarea
         rows={compact ? 4 : 6}
         bind:value={packJson}
-        placeholder={'[{"id":"example", ...}]'}
+        placeholder="粘贴规则 JSON"
       ></textarea>
     </label>
     <button
       type="button"
       disabled={busy || !packJson.trim()}
-      onclick={() => void run(async () => importAnchorPacks(packJson))}
+      onclick={() => void run(async () => importAnchorPacks(packJson), '已导入')}
     >
-      导入规则包
+      导入
     </button>
   </section>
 </div>

@@ -21,6 +21,7 @@ import {
 } from '../lib/anchors/store';
 import {
   clearNostrKey,
+  exportNostrKey,
   generateNostrKey,
   importNostrKey,
   loadNostrIdentity,
@@ -89,6 +90,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await generateNostrKey() };
     case 'nostr_import_key':
       return { ok: true, data: await importNostrKey(message.nsec) };
+    case 'nostr_export_key':
+      return { ok: true, data: await exportNostrKey() };
     case 'nostr_clear_key':
       return { ok: true, data: await clearNostrKey() };
     case 'backends_get':
