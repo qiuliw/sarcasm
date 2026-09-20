@@ -152,7 +152,7 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
     platform: input.platform,
     videoId: input.videoId,
     parentId: input.parentId ?? null,
-    nativeParentId: input.nativeParentId ?? null,
+    nativeParentId: null,
     replyToAuthor: input.replyToAuthor?.trim() || null,
     author: input.author?.trim() || '我',
     body: input.body.trim(),

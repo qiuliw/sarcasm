@@ -1,5 +1,5 @@
 import type { PageContext } from '../db/types';
-import type { NativeCommentHit, PlatformAdapter } from './types';
+import type { PlatformAdapter } from './types';
 
 function readTitle(doc: Document): string | undefined {
   const h1 = doc.querySelector('h1, .video-title, [class*="video-title"]');
@@ -9,7 +9,7 @@ function readTitle(doc: Document): string | undefined {
 
 function extractBvid(url: URL): string | null {
   const fromPath = url.pathname.match(/\/video\/(BV[\w]+)/i);
-  if (fromPath) return fromPath[1];
+  if (fromPath) return fromPath[1] ?? null;
   const fromQuery = url.searchParams.get('bvid');
   if (fromQuery?.startsWith('BV')) return fromQuery;
   return null;
@@ -22,10 +22,6 @@ function extractAid(url: URL, doc: Document): string | null {
   const aidFromMeta = aidMeta?.match(/\/video\/av(\d+)/);
   if (aidFromMeta) return `av${aidFromMeta[1]}`;
   return null;
-}
-
-function cleanPreview(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 
 export const bilibiliAdapter: PlatformAdapter = {
@@ -44,45 +40,6 @@ export const bilibiliAdapter: PlatformAdapter = {
       title: readTitle(doc),
       url: url.href,
     };
-  },
-
-  scanNativeComments(doc): NativeCommentHit[] {
-    const hits: NativeCommentHit[] = [];
-    const seen = new Set<string>();
-
-    const candidates = doc.querySelectorAll<HTMLElement>(
-      [
-        '[data-root-reply-id]',
-        '[data-reply-id]',
-        '[data-rpid]',
-        'bili-comment-thread-renderer',
-        '.reply-item',
-        '.comment-item',
-      ].join(','),
-    );
-
-    for (const el of candidates) {
-      const id =
-        el.getAttribute('data-root-reply-id') ||
-        el.getAttribute('data-reply-id') ||
-        el.getAttribute('data-rpid') ||
-        el.getAttribute('rpid') ||
-        el.dataset.rootReplyId ||
-        el.dataset.replyId ||
-        el.dataset.rpid;
-
-      if (!id || seen.has(id)) continue;
-
-      const textEl =
-        el.querySelector('.reply-content, .content-text, .text, [class*="content"]') ?? el;
-      const preview = cleanPreview(textEl.textContent || '');
-      if (!preview) continue;
-
-      seen.add(id);
-      hits.push({ id, preview, element: el });
-    }
-
-    return hits;
   },
 
   observeNavigation(onChange) {

@@ -1,10 +1,10 @@
 # sarcasm
 
-用 **Svelte + WXT（Manifest V3）** 做的浏览器插件：在抖音、B 站视频页注入独立评论侧栏，按 **视频 ID / 评论 ID** 动态锚定回复。数据先落在扩展内的 **SQLite（sql.js）**，方便以后换成自建后端。
+用 **Svelte + WXT（Manifest V3）** 做的浏览器插件：在抖音、B 站视频页注入独立评论侧栏，按 **视频 ID** 挂载外挂评论。数据先落在扩展内的 **SQLite（sql.js）**，方便以后换成自建后端。
 
 ## 和现有项目的区别
 
-搜过一圈，**没有同款「独立外挂评论层 + 双平台锚点 + SQLite」**：
+搜过一圈，**没有同款「独立外挂评论层 + 双平台视频锚点 + SQLite」**：
 
 | 项目 | 做什么 | 和本插件差异 |
 | --- | --- | --- |
@@ -19,8 +19,7 @@
 
 - 识别当前视频锚点：`bilibili` 的 `BVxxxx` / `av`，`douyin` 的数字 `awemeId`
 - 回复视频（`video_id`）
-- 回复外挂评论（`parent_id`）
-- 锚定平台原生评论回复（`native_parent_id`；页内「外挂回复」按钮 + 侧栏列表）
+- 回复外挂评论（`parent_id`，两级楼）
 - 点赞 / 点踩（可切换、再点取消）
 - 本地 SQLite schema 已按可同步后端设计
 
@@ -66,15 +65,15 @@ bun run test    # 单元测试 + Chrome 冒烟（SQLite CRUD + B站注入）
 ## 已验证
 
 - MV3 CSP 含 `'wasm-unsafe-eval'`，service worker 内 sql.js WASM 可实例化
-- popup → background：创建 / 原生锚点 / 楼中楼 / 级联删除 / stats
+- popup → background：CRUD / 点赞点踩 / 楼中楼 / 级联删除 / stats
 - B 站视频页注入 `<sarcasm-root>` 并识别 `videoId`
+
 ## 数据模型（便于以后接后端）
 
 ```sql
 comments(
   id, platform, video_id,
   parent_id,          -- 外挂楼中楼
-  native_parent_id,   -- 锚定平台评论 id
   reply_to_author,
   author, body,
   likes, dislikes, my_vote,
@@ -86,6 +85,5 @@ comments(
 
 ## 注意
 
-- 抖音/B 站 DOM 经常改版，原生评论 id 选择器可能失效；视频 ID 来自 URL，相对更稳。
-- 抖音偶发拿不到稳定 `commentId` 时会退化为文本 hash 锚点（`hash:…`），不如官方 id 稳。
+- 视频 ID 来自 URL，相对稳；站点改版主要影响页面识别，不影响已存评论。
 - 仅本机存储，清扩展数据会丢评论；多设备同步要等你的服务器。

@@ -30,7 +30,6 @@
 
   function label(t: ReplyTarget | null): string {
     if (!t || t.kind === 'video') return '发条评论';
-    if (t.kind === 'native_comment') return '回复原评论';
     if (t.replyToAuthor) return `回复 @${t.replyToAuthor}`;
     return '回复评论';
   }

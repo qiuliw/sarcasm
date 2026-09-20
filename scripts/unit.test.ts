@@ -26,7 +26,6 @@ describe('buildCommentForest', () => {
   test('keeps only two levels and hoists deeper parents', () => {
     const rows = [
       comment({ id: 'v1', body: 'on video', author: 'A' }),
-      comment({ id: 'n1', body: 'on native', nativeParentId: 'rpid-9', author: 'B' }),
       comment({ id: 'c1', body: 'child', parentId: 'v1', replyToAuthor: 'A', author: 'C' }),
       // 误写成三级：应提升到 v1 下
       comment({ id: 'c2', body: 'deep', parentId: 'c1', replyToAuthor: 'C', author: 'D' }),
@@ -35,7 +34,6 @@ describe('buildCommentForest', () => {
     expect(forest.videoRoots).toHaveLength(1);
     expect(forest.videoRoots[0].children.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
     expect(forest.videoRoots[0].children.every((c) => c.children.length === 0)).toBe(true);
-    expect(forest.byNativeParent['rpid-9']).toHaveLength(1);
   });
 });
 

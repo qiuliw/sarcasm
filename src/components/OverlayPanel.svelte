@@ -21,25 +21,20 @@
   let loading = $state(false);
   let status = $state('');
   let highlightId = $state<string | null>(null);
-  let nativePreviews = $state<Record<string, string>>({});
   let scrollEl = $state<HTMLDivElement | null>(null);
   let author = $state(getDefaultAuthor());
   let expandedRoots = $state<Record<string, true>>({});
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
-  const hasComments = $derived(
-    forest.videoRoots.length > 0 || Object.keys(forest.byNativeParent).length > 0,
-  );
+  const hasComments = $derived(forest.videoRoots.length > 0);
   const platformLabel = $derived(
     context?.platform === 'bilibili' ? 'B站' : context?.platform === 'douyin' ? '抖音' : '',
   );
 
   let stopNav: (() => void) | null = null;
-  let scanTimer: number | undefined;
   let highlightTimer: number | undefined;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
-  const NATIVE_PREVIEW_KEY = 'sarcasm_native_previews';
 
   async function setOpen(value: boolean) {
     open = value;
@@ -115,7 +110,6 @@
       author,
       parentId:
         target.kind === 'overlay_comment' ? target.threadRootId ?? target.targetId ?? null : null,
-      nativeParentId: target.kind === 'native_comment' ? target.targetId ?? null : null,
       replyToAuthor: target.kind === 'overlay_comment' ? target.replyToAuthor ?? null : null,
     });
 
@@ -158,60 +152,13 @@
     rows = rows.map((row) => (row.id === id ? updated : row));
   }
 
-  async function rememberNativePreview(id: string, preview: string) {
-    const next = { ...nativePreviews, [id]: preview.slice(0, 60) };
-    nativePreviews = next;
-    await browser.storage.local.set({ [NATIVE_PREVIEW_KEY]: next });
-  }
-
-  function nativeSectionTitle(nativeId: string): string {
-    const preview = nativePreviews[nativeId]?.trim();
-    if (preview) return preview;
-    return '原评论';
-  }
-
-  function anchorNative(id: string, preview: string) {
-    replyTarget = {
-      kind: 'native_comment',
-      targetId: id,
-      preview,
-    };
-    void rememberNativePreview(id, preview);
-    void setOpen(true);
-  }
-
   async function handleAuthorChange(name: string) {
     author = await saveAuthor(name);
   }
 
-  function injectNativeButtons() {
-    const adapter = resolveAdapter();
-    if (!adapter) return;
-    for (const hit of adapter.scanNativeComments(document)) {
-      if (hit.element.querySelector('.sc-anchor-btn')) continue;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'sc-anchor-btn';
-      btn.textContent = '外评';
-      btn.title = '用外挂评论回复这条';
-      btn.style.cssText =
-        'margin-left:8px;font-size:12px;font-weight:500;border:0;background:transparent;color:#FB7299;padding:0 4px;cursor:pointer;';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        anchorNative(hit.id, hit.preview);
-      });
-      hit.element.appendChild(btn);
-    }
-  }
-
   onMount(() => {
-    void browser.storage.local.get([UI_OPEN_KEY, NATIVE_PREVIEW_KEY]).then((stored) => {
+    void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
-      const previews = stored[NATIVE_PREVIEW_KEY];
-      if (previews && typeof previews === 'object') {
-        nativePreviews = previews as Record<string, string>;
-      }
     });
     void loadAuthor().then((name) => {
       author = name;
@@ -223,15 +170,10 @@
       adapter?.observeNavigation(() => {
         void refreshContext();
       }) ?? null;
-
-    scanTimer = window.setInterval(() => {
-      injectNativeButtons();
-    }, 1500);
   });
 
   onDestroy(() => {
     stopNav?.();
-    if (scanTimer) window.clearInterval(scanTimer);
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
@@ -314,51 +256,27 @@
         {:else if !context}
           <p class="empty">打开具体视频页后再说</p>
         {:else if !hasComments}
-          <p class="empty">还没有评论。可以直接说两句，或点原评论旁的「外评」挂靠回复。</p>
+          <p class="empty">还没有评论，来说两句吧</p>
         {:else}
-          {#if forest.videoRoots.length}
-            <section class="section">
-              <h3>
-                <span>视频下</span>
-                <span class="sec-count">{forest.videoRoots.length}</span>
-              </h3>
-              <div class="list">
-                {#each forest.videoRoots as node (node.id)}
-                  <CommentItem
-                    {node}
-                    {highlightId}
-                    expanded={!!expandedRoots[node.id]}
-                    onExpand={expandRoot}
-                    onReply={replyOverlay}
-                    onDelete={handleDelete}
-                    onVote={handleVote}
-                  />
-                {/each}
-              </div>
-            </section>
-          {/if}
-
-          {#each Object.entries(forest.byNativeParent) as [nativeId, nodes] (nativeId)}
-            <section class="section">
-              <h3 title={nativeId}>
-                <span>原评</span>
-                <span class="native-preview">{nativeSectionTitle(nativeId)}</span>
-              </h3>
-              <div class="list">
-                {#each nodes as node (node.id)}
-                  <CommentItem
-                    {node}
-                    {highlightId}
-                    expanded={!!expandedRoots[node.id]}
-                    onExpand={expandRoot}
-                    onReply={replyOverlay}
-                    onDelete={handleDelete}
-                    onVote={handleVote}
-                  />
-                {/each}
-              </div>
-            </section>
-          {/each}
+          <section class="section">
+            <h3>
+              <span>评论</span>
+              <span class="sec-count">{forest.videoRoots.length}</span>
+            </h3>
+            <div class="list">
+              {#each forest.videoRoots as node (node.id)}
+                <CommentItem
+                  {node}
+                  {highlightId}
+                  expanded={!!expandedRoots[node.id]}
+                  onExpand={expandRoot}
+                  onReply={replyOverlay}
+                  onDelete={handleDelete}
+                  onVote={handleVote}
+                />
+              {/each}
+            </div>
+          </section>
         {/if}
       </div>
 
@@ -643,19 +561,6 @@
     font-size: 13px;
     color: var(--sc-muted);
     font-weight: 500;
-  }
-
-  .native-preview {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--sc-accent);
-    background: var(--sc-accent-soft);
-    border-radius: 4px;
-    padding: 1px 6px;
   }
 
   .sec-count {

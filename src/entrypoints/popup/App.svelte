@@ -50,7 +50,7 @@
   <ol class="steps">
     <li><span>1</span>打开抖音或 B 站视频页</li>
     <li><span>2</span>点右下角粉色按钮展开面板</li>
-    <li><span>3</span>原评论旁点「外评」可锚定回复</li>
+    <li><span>3</span>直接评论，或点「回复」盖楼</li>
   </ol>
 
   <footer>评论只保存在当前浏览器，换机不同步</footer>

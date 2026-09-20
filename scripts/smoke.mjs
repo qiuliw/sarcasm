@@ -51,12 +51,11 @@ async function runCrud(page) {
       videoId: 'BV_SMOKE_TEST',
       body: 'smoke hello',
       author: 'tester',
-      nativeParentId: 'native_123',
     },
   });
   assert(created?.ok, `create failed: ${JSON.stringify(created)}`);
   assert(created.data?.id, 'create 未返回 id');
-  assert(created.data?.nativeParentId === 'native_123', 'native 锚点未写入');
+  assert(created.data?.nativeParentId == null, '新评论不应写入原生锚点');
 
   const reply = await send(page, {
     type: 'create_comment',
@@ -164,7 +163,7 @@ async function runContentScriptOnBilibili(browser, extensionId) {
 
   await page.evaluate(() => {
     const host = document.querySelector('sarcasm-root');
-    const button = host?.shadowRoot?.querySelector('button.edge-trigger');
+    const button = host?.shadowRoot?.querySelector('button.fab');
     if (button instanceof HTMLElement) button.click();
   });
   await page.waitForFunction(

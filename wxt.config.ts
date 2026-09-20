@@ -16,7 +16,7 @@ export default defineConfig({
       default_title: 'sarcasm',
     },
     name: 'sarcasm',
-    description: '抖音 / B站独立评论层：按视频 ID 与评论 ID 动态锚定回复，本地 SQLite 存储',
+    description: '抖音 / B站独立评论层：按视频 ID 挂载外挂评论，本地 SQLite 存储',
     permissions: ['storage'],
     host_permissions: [
       '*://*.bilibili.com/*',
