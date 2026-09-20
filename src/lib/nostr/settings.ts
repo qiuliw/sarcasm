@@ -15,17 +15,19 @@ export const DEFAULT_RELAYS = [
   'wss://relay.nostr.band',
 ];
 
+/** 一把密钥 + 其显示名 = 一个身份；同步配置另存同对象 */
 export interface NostrSettings {
   nsec: string | null;
+  displayName: string;
   relays: string[];
   publishEnabled: boolean;
-  displayName: string;
 }
 
 export interface NostrIdentity {
   configured: boolean;
   npub: string | null;
   pubkey: string | null;
+  /** 发评作者：显示名，缺省为「我」 */
   shortLabel: string;
   displayName: string;
   publishEnabled: boolean;
@@ -41,12 +43,16 @@ function normalizeRelays(raw: unknown): string[] {
   return list.length ? [...new Set(list)] : [...DEFAULT_RELAYS];
 }
 
+function normalizeName(name: string): string {
+  return name.trim().slice(0, 32);
+}
+
 export function defaultNostrSettings(): NostrSettings {
   return {
     nsec: null,
+    displayName: '',
     relays: [...DEFAULT_RELAYS],
     publishEnabled: true,
-    displayName: '',
   };
 }
 
@@ -58,9 +64,14 @@ export async function loadNostrSettings(): Promise<NostrSettings> {
     typeof raw.nsec === 'string' && tryParseNsec(raw.nsec) ? raw.nsec.trim() : null;
   return {
     nsec,
+    // 无密钥时不保留显示名，避免「孤儿昵称」
+    displayName: nsec
+      ? typeof raw.displayName === 'string'
+        ? normalizeName(raw.displayName)
+        : ''
+      : '',
     relays: normalizeRelays(raw.relays),
     publishEnabled: raw.publishEnabled !== false,
-    displayName: typeof raw.displayName === 'string' ? raw.displayName.trim().slice(0, 32) : '',
   };
 }
 
@@ -68,41 +79,53 @@ export async function saveNostrSettings(next: NostrSettings): Promise<NostrSetti
   const nsec = next.nsec && tryParseNsec(next.nsec) ? next.nsec.trim() : null;
   const settings: NostrSettings = {
     nsec,
+    displayName: nsec ? normalizeName(next.displayName) : '',
     relays: normalizeRelays(next.relays),
     publishEnabled: Boolean(next.publishEnabled),
-    displayName: next.displayName.trim().slice(0, 32),
   };
   await browser.storage.local.set({ [SETTINGS_KEY]: settings });
   return settings;
 }
 
+/** 换新密钥 = 新身份，清空显示名 */
 export async function generateNostrKey(): Promise<NostrSettings> {
   const current = await loadNostrSettings();
-  const sk = createSecretKey();
   return saveNostrSettings({
     ...current,
-    nsec: secretToNsec(sk),
+    nsec: secretToNsec(createSecretKey()),
+    displayName: '',
   });
 }
 
+/** 导入密钥 = 切换身份，清空旧显示名 */
 export async function importNostrKey(nsecInput: string): Promise<NostrSettings> {
   const nsec = tryParseNsec(nsecInput);
   if (!nsec) throw new Error('nsec 格式无效');
   const current = await loadNostrSettings();
-  return saveNostrSettings({ ...current, nsec });
+  return saveNostrSettings({
+    ...current,
+    nsec,
+    displayName: '',
+  });
 }
 
+/** 清除身份（密钥 + 显示名） */
 export async function clearNostrKey(): Promise<NostrSettings> {
-  const current = await loadNostrSettings();
-  return saveNostrSettings({ ...current, nsec: null });
-}
-
-/** 只改显示名，不动密钥与同步配置 */
-export async function saveDisplayName(name: string): Promise<NostrSettings> {
   const current = await loadNostrSettings();
   return saveNostrSettings({
     ...current,
-    displayName: name.trim().slice(0, 32),
+    nsec: null,
+    displayName: '',
+  });
+}
+
+/** 为当前密钥设置显示名；无密钥时不可用 */
+export async function saveDisplayName(name: string): Promise<NostrSettings> {
+  const current = await loadNostrSettings();
+  if (!current.nsec) throw new Error('请先配置密钥');
+  return saveNostrSettings({
+    ...current,
+    displayName: normalizeName(name),
   });
 }
 
@@ -118,8 +141,8 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       configured: false,
       npub: null,
       pubkey: null,
-      shortLabel: '未配置密钥',
-      displayName: settings.displayName,
+      shortLabel: '未配置',
+      displayName: '',
       publishEnabled: settings.publishEnabled,
       relays: settings.relays,
     };
@@ -128,12 +151,13 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
     const sk = nsecToSecret(settings.nsec);
     const pubkey = secretToPubkey(sk);
     const npub = pubkeyToNpub(pubkey);
+    const displayName = normalizeName(settings.displayName);
     return {
       configured: true,
       npub,
       pubkey,
-      shortLabel: settings.displayName || '我',
-      displayName: settings.displayName,
+      shortLabel: displayName || '我',
+      displayName,
       publishEnabled: settings.publishEnabled,
       relays: settings.relays,
     };
@@ -143,7 +167,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       npub: null,
       pubkey: null,
       shortLabel: '密钥无效',
-      displayName: settings.displayName,
+      displayName: '',
       publishEnabled: settings.publishEnabled,
       relays: settings.relays,
     };

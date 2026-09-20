@@ -47,7 +47,6 @@
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
   const backends = availableBackends();
-  const keyStatus = $derived(identity?.configured ? '已配置' : '未配置');
   let displayNameDraft = $state('');
 
   async function refresh() {
@@ -96,7 +95,8 @@
     try {
       exportedNsec = await exportNostrKeyApi();
       showExport = true;
-      status = '密钥已导出';
+      showImport = false;
+      status = '已导出';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -161,87 +161,103 @@
   {/if}
 
   <section class="card">
-    <h2>显示名</h2>
-    <div class="inline-row">
-      <input
-        type="text"
-        maxlength="32"
-        placeholder="可选"
-        bind:value={displayNameDraft}
-      />
-      <button
-        type="button"
-        class="save-sm"
-        disabled={busy}
-        onclick={() =>
-          void run(async () => {
-            await saveDisplayNameApi(displayNameDraft);
-          }, '显示名已保存')}
-      >
-        保存
-      </button>
-    </div>
-  </section>
+    <h2>身份</h2>
 
-  <section class="card">
-    <h2>密钥</h2>
-    <p class="mono" class:muted={!identity?.configured}>{keyStatus}</p>
+    {#if identity?.configured}
+      <div class="inline-row">
+        <input
+          type="text"
+          maxlength="32"
+          placeholder="显示名（可选）"
+          bind:value={displayNameDraft}
+        />
+        <button
+          type="button"
+          class="save-sm"
+          disabled={busy}
+          onclick={() =>
+            void run(async () => {
+              await saveDisplayNameApi(displayNameDraft);
+            }, '已保存')}
+        >
+          保存
+        </button>
+      </div>
 
-    <div class="actions">
-      <button
-        type="button"
-        disabled={busy}
-        onclick={() =>
-          void run(async () => {
-            exportedNsec = '';
+      <div class="actions">
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy}
+          onclick={() => void exportKey()}
+        >
+          导出密钥
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          class:active={showImport}
+          disabled={busy}
+          onclick={() => {
+            showImport = !showImport;
             showExport = false;
-            await generateNostrKeyApi();
-          }, '密钥已生成')}
-      >
-        生成
-      </button>
-      <button
-        type="button"
-        class="ghost"
-        disabled={busy || !identity?.configured}
-        onclick={() => void exportKey()}
-      >
-        导出
-      </button>
-      <button
-        type="button"
-        class="ghost"
-        class:active={showImport}
-        disabled={busy}
-        onclick={() => {
-          showImport = !showImport;
-          if (!showImport) nsecInput = '';
-        }}
-      >
-        导入
-      </button>
-      <button
-        type="button"
-        class="ghost"
-        disabled={busy || !identity?.configured}
-        onclick={() =>
-          void run(async () => {
-            exportedNsec = '';
-            showExport = false;
-            showImport = false;
-            await clearNostrKeyApi();
-          }, '密钥已清除')}
-      >
-        清除
-      </button>
-    </div>
+            if (!showImport) nsecInput = '';
+          }}
+        >
+          更换
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy}
+          onclick={() =>
+            void run(async () => {
+              exportedNsec = '';
+              showExport = false;
+              showImport = false;
+              await clearNostrKeyApi();
+            }, '已清除')}
+        >
+          清除
+        </button>
+      </div>
+    {:else}
+      <p class="hint">一把密钥对应一个显示名。</p>
+      <div class="actions">
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() =>
+            void run(async () => {
+              exportedNsec = '';
+              showExport = false;
+              showImport = false;
+              await generateNostrKeyApi();
+            }, '已生成')}
+        >
+          生成密钥
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          class:active={showImport}
+          disabled={busy}
+          onclick={() => {
+            showImport = !showImport;
+            if (!showImport) nsecInput = '';
+          }}
+        >
+          导入密钥
+        </button>
+      </div>
+    {/if}
 
     {#if showExport && exportedNsec}
       <label class="field">
         <span>nsec</span>
         <input type="text" readonly value={exportedNsec} />
       </label>
-      <button type="button" class="ghost" disabled={busy} onclick={() => void copyText(exportedNsec, '已复制到剪贴板')}>
+      <button type="button" class="ghost" disabled={busy} onclick={() => void copyText(exportedNsec, '已复制')}>
         复制
       </button>
     {/if}
@@ -266,7 +282,7 @@
             exportedNsec = '';
             showExport = false;
             showImport = false;
-          }, '密钥已导入')}
+          }, '已导入')}
       >
         确认导入
       </button>
@@ -443,16 +459,10 @@
     color: var(--sc-ink, #18191c);
   }
 
-  .mono {
+  .hint {
     margin: 0;
     font-size: 12px;
-    font-weight: 500;
-    color: var(--sc-accent, #fb7299);
-  }
-
-  .mono.muted {
     color: var(--sc-faint, #9499a0);
-    font-weight: 400;
   }
 
   .field {
