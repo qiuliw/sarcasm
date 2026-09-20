@@ -1,8 +1,8 @@
-import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure';
-import { SimplePool } from 'nostr-tools/pool';
 import type { Platform } from '../db/types';
 import { nsecToSecret } from './keys';
 import { loadNostrSettings } from './settings';
+import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure';
+import { SimplePool } from 'nostr-tools/pool';
 
 export interface PublishCommentInput {
   platform: Platform;

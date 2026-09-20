@@ -8,6 +8,8 @@ import type {
   VoteKind,
 } from '../db/types';
 import type { NostrIdentity, NostrSettings } from '../nostr/settings';
+import type { AnchorPack } from '../anchors/packs';
+import type { BackendId } from '../backends/dispatch';
 
 export type BgRequest =
   | { type: 'ping' }
@@ -21,7 +23,13 @@ export type BgRequest =
   | { type: 'nostr_save_settings'; settings: NostrSettings }
   | { type: 'nostr_generate_key' }
   | { type: 'nostr_import_key'; nsec: string }
-  | { type: 'nostr_clear_key' };
+  | { type: 'nostr_clear_key' }
+  | { type: 'backends_get' }
+  | { type: 'backends_set'; ids: BackendId[] }
+  | { type: 'anchors_list' }
+  | { type: 'anchors_export'; includeBuiltin?: boolean }
+  | { type: 'anchors_import'; json: string }
+  | { type: 'anchors_clear_custom' };
 
 export type BgResponse =
   | { ok: true; data?: unknown }
@@ -81,4 +89,28 @@ export function importNostrKeyApi(nsec: string): Promise<NostrSettings> {
 
 export function clearNostrKeyApi(): Promise<NostrSettings> {
   return sendBg({ type: 'nostr_clear_key' });
+}
+
+export function getEnabledBackends(): Promise<BackendId[]> {
+  return sendBg({ type: 'backends_get' });
+}
+
+export function setEnabledBackends(ids: BackendId[]): Promise<BackendId[]> {
+  return sendBg({ type: 'backends_set', ids });
+}
+
+export function listAnchorPacks(): Promise<{ all: AnchorPack[]; custom: AnchorPack[] }> {
+  return sendBg({ type: 'anchors_list' });
+}
+
+export function exportAnchorPacks(includeBuiltin = true): Promise<string> {
+  return sendBg({ type: 'anchors_export', includeBuiltin });
+}
+
+export function importAnchorPacks(json: string): Promise<AnchorPack[]> {
+  return sendBg({ type: 'anchors_import', json });
+}
+
+export function clearCustomAnchorPacks(): Promise<AnchorPack[]> {
+  return sendBg({ type: 'anchors_clear_custom' });
 }

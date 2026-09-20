@@ -11,7 +11,12 @@
     ReplyTarget,
     VoteKind,
   } from '../lib/db/types';
-  import { readPageContext, resolveAdapter } from '../lib/platforms';
+  import type { AnchorPack } from '../lib/anchors/packs';
+  import {
+    loadAllPacks,
+    observeHref,
+    resolvePageContextSync,
+  } from '../lib/anchors/store';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
   import { loadNostrIdentity, type NostrIdentity } from '../lib/nostr/settings';
 
@@ -25,13 +30,14 @@
   let highlightId = $state<string | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let identity = $state<NostrIdentity | null>(null);
+  let packs = $state<AnchorPack[]>([]);
   let expandedRoots = $state<Record<string, true>>({});
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
   const hasComments = $derived(forest.videoRoots.length > 0);
   const platformLabel = $derived(
-    context?.platform === 'bilibili' ? 'B站' : context?.platform === 'douyin' ? '抖音' : '',
+    packs.find((p) => p.id === context?.platform)?.name || context?.platform || '',
   );
   const authorLabel = $derived(identity?.shortLabel || '未配置密钥');
 
@@ -39,7 +45,6 @@
   let highlightTimer: number | undefined;
   let stopStorage: (() => void) | null = null;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
-
   async function setOpen(value: boolean) {
     open = value;
     await browser.storage.local.set({ [UI_OPEN_KEY]: value });
@@ -78,7 +83,7 @@
   }
 
   async function refreshContext() {
-    const next = readPageContext();
+    const next = resolvePageContextSync(packs, document, location.href);
     const switched =
       context?.platform !== next?.platform || context?.videoId !== next?.videoId;
 
@@ -203,23 +208,29 @@
     identity = await loadNostrIdentity();
   }
 
+  async function refreshPacks() {
+    packs = await loadAllPacks();
+  }
+
   onMount(() => {
     void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
     });
     void refreshIdentity();
-    void refreshContext();
+    void refreshPacks().then(() => refreshContext());
     window.addEventListener('keydown', handleKeydown);
-    const onStorage = () => {
+    const onStorage = (changes: Record<string, unknown>, area: string) => {
+      if (area !== 'local') return;
       void refreshIdentity();
+      if ('sarcasm_anchor_packs_v1' in changes) {
+        void refreshPacks().then(() => refreshContext());
+      }
     };
     browser.storage.onChanged.addListener(onStorage);
     stopStorage = () => browser.storage.onChanged.removeListener(onStorage);
-    const adapter = resolveAdapter();
-    stopNav =
-      adapter?.observeNavigation(() => {
-        void refreshContext();
-      }) ?? null;
+    stopNav = observeHref(() => {
+      void refreshContext();
+    });
   });
 
   onDestroy(() => {

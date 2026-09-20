@@ -1,11 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
+    clearCustomAnchorPacks,
     clearNostrKeyApi,
+    exportAnchorPacks,
     generateNostrKeyApi,
+    getEnabledBackends,
     getNostrSettings,
+    importAnchorPacks,
     importNostrKeyApi,
+    listAnchorPacks,
     saveNostrSettingsApi,
+    setEnabledBackends,
   } from '../../lib/messaging/api';
   import {
     DEFAULT_RELAYS,
@@ -13,6 +19,8 @@
     type NostrSettings,
   } from '../../lib/nostr/settings';
   import { shortNpub } from '../../lib/nostr/keys';
+  import type { AnchorPack } from '../../lib/anchors/packs';
+  import { BACKEND_META, type BackendId } from '../../lib/backends/dispatch';
 
   let settings = $state<NostrSettings | null>(null);
   let nsecInput = $state('');
@@ -21,6 +29,10 @@
   let status = $state('');
   let error = $state('');
   let busy = $state(false);
+  let enabledBackends = $state<BackendId[]>(['nostr']);
+  let packs = $state<AnchorPack[]>([]);
+  let customCount = $state(0);
+  let packJson = $state('');
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
 
@@ -28,6 +40,10 @@
     settings = await getNostrSettings();
     relayText = settings.relays.join('\n');
     nsecInput = '';
+    enabledBackends = await getEnabledBackends();
+    const listed = await listAnchorPacks();
+    packs = listed.all;
+    customCount = listed.custom.length;
   }
 
   function parseRelays(text: string): string[] {
@@ -35,6 +51,13 @@
       .split(/\n|,/)
       .map((s) => s.trim())
       .filter(Boolean);
+  }
+
+  function toggleBackend(id: BackendId, on: boolean) {
+    const meta = BACKEND_META.find((b) => b.id === id);
+    if (!meta?.ready) return;
+    if (on) enabledBackends = [...new Set([...enabledBackends, id])];
+    else enabledBackends = enabledBackends.filter((x) => x !== id);
   }
 
   async function run(action: () => Promise<unknown>) {
@@ -62,7 +85,7 @@
 <main class="page">
   <header>
     <h1>设置</h1>
-    <p>用 Nostr 密钥作为身份，评论可同步到公共 relay 社区。</p>
+    <p>身份、事件源、锚点规则。保持简单：开关 + JSON 导入导出。</p>
   </header>
 
   {#if error}
@@ -72,10 +95,10 @@
   {/if}
 
   <section class="card">
-    <h2>身份</h2>
+    <h2>身份（Nostr 密钥）</h2>
     {#if identity?.configured && identity.npub}
       <p class="mono" title={identity.npub}>{shortNpub(identity.npub)}</p>
-      <p class="hint">完整 npub 请自行备份；私钥切勿泄露。</p>
+      <p class="hint">私钥切勿泄露。</p>
     {:else}
       <p class="hint">尚未配置密钥，无法发评。</p>
     {/if}
@@ -97,10 +120,7 @@
       <button
         type="button"
         disabled={busy}
-        onclick={() =>
-          void run(async () => {
-            await generateNostrKeyApi();
-          })}
+        onclick={() => void run(async () => generateNostrKeyApi())}
       >
         生成新密钥
       </button>
@@ -108,10 +128,7 @@
         type="button"
         class="ghost"
         disabled={busy || !identity?.configured}
-        onclick={() =>
-          void run(async () => {
-            await clearNostrKeyApi();
-          })}
+        onclick={() => void run(async () => clearNostrKeyApi())}
       >
         清除密钥
       </button>
@@ -144,34 +161,99 @@
   </section>
 
   <section class="card">
-    <h2>社区 Relay</h2>
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={settings?.publishEnabled ?? true}
-        onchange={(e) => {
-          if (settings) settings.publishEnabled = e.currentTarget.checked;
-        }}
-      />
-      发评论时同步发布到 Nostr
-    </label>
-    <label class="field">
-      <span>Relays（每行一个 wss://）</span>
-      <textarea rows="5" bind:value={relayText}></textarea>
-    </label>
+    <h2>事件源</h2>
+    <p class="hint">本地 SQLite 始终写入；下面是额外同步目标。</p>
+    {#each BACKEND_META as backend (backend.id)}
+      <label class="check">
+        <input
+          type="checkbox"
+          disabled={!backend.ready}
+          checked={enabledBackends.includes(backend.id)}
+          onchange={(e) => toggleBackend(backend.id, e.currentTarget.checked)}
+        />
+        {backend.name}{backend.ready ? '' : '（未接入）'}
+      </label>
+    {/each}
+
+    {#if enabledBackends.includes('nostr')}
+      <label class="field">
+        <span>Nostr Relays（每行一个 wss://）</span>
+        <textarea rows="4" bind:value={relayText}></textarea>
+      </label>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings?.publishEnabled ?? true}
+          onchange={(e) => {
+            if (settings) settings.publishEnabled = e.currentTarget.checked;
+          }}
+        />
+        Nostr 发布开关
+      </label>
+    {/if}
+
     <button
       type="button"
       disabled={busy || !settings}
       onclick={() =>
         void run(async () => {
           if (!settings) return;
+          await setEnabledBackends(enabledBackends);
           await saveNostrSettingsApi({
             ...settings,
             relays: parseRelays(relayText),
           });
         })}
     >
-      保存社区设置
+      保存事件源
+    </button>
+  </section>
+
+  <section class="card">
+    <h2>锚点规则</h2>
+    <p class="hint">
+      当前 {packs.length} 套（自定义 {customCount}）。导入 JSON 可覆盖同 id。
+    </p>
+    <ul class="pack-list">
+      {#each packs as pack (pack.id)}
+        <li>
+          <strong>{pack.name}</strong>
+          <code>{pack.id}</code>
+          <span>{pack.hosts.join(', ')}</span>
+        </li>
+      {/each}
+    </ul>
+    <div class="actions">
+      <button
+        type="button"
+        class="ghost"
+        disabled={busy}
+        onclick={() =>
+          void run(async () => {
+            packJson = await exportAnchorPacks(true);
+          })}
+      >
+        导出全部
+      </button>
+      <button
+        type="button"
+        class="ghost"
+        disabled={busy || customCount === 0}
+        onclick={() => void run(async () => clearCustomAnchorPacks())}
+      >
+        清空自定义
+      </button>
+    </div>
+    <label class="field">
+      <span>导入 / 粘贴 JSON</span>
+      <textarea rows="6" bind:value={packJson} placeholder={'[{"id":"example", ...}]'}></textarea>
+    </label>
+    <button
+      type="button"
+      disabled={busy || !packJson.trim()}
+      onclick={() => void run(async () => importAnchorPacks(packJson))}
+    >
+      导入规则包
     </button>
   </section>
 </main>
@@ -275,6 +357,28 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  .pack-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  .pack-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    color: #61666d;
+  }
+
+  .pack-list code {
+    font-size: 11px;
+    color: #fb7299;
   }
 
   button {

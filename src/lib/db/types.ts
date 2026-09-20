@@ -1,4 +1,4 @@
-export type Platform = 'bilibili' | 'douyin';
+export type Platform = string;
 
 /** 本地点赞状态：赞 / 踩 / 未表态 */
 export type VoteKind = 'up' | 'down';

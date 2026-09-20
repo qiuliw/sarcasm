@@ -7,7 +7,18 @@ import {
   voteComment,
 } from '../lib/db/sqlite';
 import type { BgRequest, BgResponse } from '../lib/messaging/api';
-import { publishCommentToNostr } from '../lib/nostr/publish';
+import { publishOutbound } from '../lib/backends/dispatch';
+import {
+  loadEnabledBackends,
+  saveEnabledBackends,
+} from '../lib/backends/dispatch';
+import {
+  exportPacksJson,
+  importPacksJson,
+  loadAllPacks,
+  loadCustomPacks,
+  saveCustomPacks,
+} from '../lib/anchors/store';
 import {
   clearNostrKey,
   generateNostrKey,
@@ -46,17 +57,15 @@ async function handle(message: BgRequest): Promise<BgResponse> {
         ...message.input,
         author: message.input.author || identity.shortLabel,
       });
-      if (identity.publishEnabled) {
-        const published = await publishCommentToNostr({
-          platform: record.platform,
-          videoId: record.videoId,
-          body: record.body,
-          parentCommentId: record.parentId,
-          pageUrl: message.input.pageUrl,
-        });
-        if (!published.ok) {
-          console.warn('[sarcasm] nostr publish failed', published.error);
-        }
+      const results = await publishOutbound({
+        platform: record.platform,
+        videoId: record.videoId,
+        body: record.body,
+        parentId: record.parentId,
+        pageUrl: message.input.pageUrl,
+      });
+      for (const r of results) {
+        if (!r.ok) console.warn(`[sarcasm] backend ${r.id} failed`, r.error);
       }
       return { ok: true, data: record };
     }
@@ -79,6 +88,25 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await importNostrKey(message.nsec) };
     case 'nostr_clear_key':
       return { ok: true, data: await clearNostrKey() };
+    case 'backends_get':
+      return { ok: true, data: await loadEnabledBackends() };
+    case 'backends_set':
+      return { ok: true, data: await saveEnabledBackends(message.ids) };
+    case 'anchors_list':
+      return {
+        ok: true,
+        data: {
+          all: await loadAllPacks(),
+          custom: await loadCustomPacks(),
+        },
+      };
+    case 'anchors_export':
+      return { ok: true, data: await exportPacksJson(message.includeBuiltin !== false) };
+    case 'anchors_import':
+      return { ok: true, data: await importPacksJson(message.json) };
+    case 'anchors_clear_custom':
+      await saveCustomPacks([]);
+      return { ok: true, data: [] };
     default:
       return { ok: false, error: 'unknown message' };
   }

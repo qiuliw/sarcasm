@@ -1,19 +1,26 @@
-import { bilibiliAdapter } from './bilibili';
-import { douyinAdapter } from './douyin';
-import type { PlatformAdapter } from './types';
 import type { PageContext } from '../db/types';
+import {
+  loadAllPacks,
+  observeHref,
+  resolvePageContext,
+  resolvePageContextSync,
+} from '../anchors/store';
+import type { AnchorPack } from '../anchors/packs';
 
-const adapters: PlatformAdapter[] = [bilibiliAdapter, douyinAdapter];
-
-export function resolveAdapter(url = new URL(location.href)): PlatformAdapter | null {
-  return adapters.find((a) => a.match(url)) ?? null;
+/** @deprecated 用锚点规则包；保留给旧测试的薄封装 */
+export async function readPageContext(
+  doc = document,
+  href = location.href,
+): Promise<PageContext | null> {
+  return resolvePageContext(doc, href);
 }
 
-export function readPageContext(doc = document, href = location.href): PageContext | null {
-  const url = new URL(href);
-  const adapter = resolveAdapter(url);
-  if (!adapter) return null;
-  return adapter.readContext(url, doc);
+export function readPageContextWithPacks(
+  packs: AnchorPack[],
+  doc = document,
+  href = location.href,
+): PageContext | null {
+  return resolvePageContextSync(packs, doc, href);
 }
 
-export { bilibiliAdapter, douyinAdapter };
+export { loadAllPacks, observeHref, resolvePageContextSync };
