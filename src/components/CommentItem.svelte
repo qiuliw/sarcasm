@@ -20,6 +20,19 @@
   }: Props = $props();
 
   let confirmDelete = $state(false);
+  let expanded = $state(false);
+
+  const COLLAPSE_AT = 3;
+  const visibleChildren = $derived(
+    showReplies && node.children.length > COLLAPSE_AT && !expanded
+      ? node.children.slice(0, COLLAPSE_AT)
+      : node.children,
+  );
+  const hiddenCount = $derived(
+    showReplies && node.children.length > COLLAPSE_AT && !expanded
+      ? node.children.length - COLLAPSE_AT
+      : 0,
+  );
 
   function formatRelativeTime(ts: number): string {
     const diff = Date.now() - ts;
@@ -85,7 +98,7 @@
 
   {#if showReplies && node.children.length}
     <div class="children">
-      {#each node.children as child (child.id)}
+      {#each visibleChildren as child (child.id)}
         <CommentItem
           node={child}
           showReplies={false}
@@ -94,6 +107,11 @@
           {onDelete}
         />
       {/each}
+      {#if hiddenCount > 0}
+        <button type="button" class="more" onclick={() => (expanded = true)}>
+          展开剩余 {hiddenCount} 条回复
+        </button>
+      {/if}
     </div>
   {/if}
 </article>
@@ -219,5 +237,10 @@
 
   button.danger:hover {
     color: var(--sc-danger);
+  }
+
+  .more {
+    margin-top: 6px;
+    color: var(--sc-accent);
   }
 </style>

@@ -22,15 +22,18 @@
 
 <main class="shell">
   <header class="head">
-    <div>
-      <h1>外挂评论</h1>
-      <p>抖音 · B站</p>
+    <div class="brand">
+      <span class="mark" aria-hidden="true">外</span>
+      <div>
+        <h1>sarcasm</h1>
+        <p>抖音 · B站 独立评论层</p>
+      </div>
     </div>
     <span class="status-dot" title="插件已启用" aria-label="插件已启用"></span>
   </header>
 
   <section class="stat" aria-live="polite" aria-label="本地评论数">
-    <span>本地评论</span>
+    <span>本机已存</span>
     {#if !ready}
       <strong class="muted">…</strong>
     {:else if error}
@@ -46,33 +49,33 @@
 
   <ol class="steps">
     <li><span>1</span>打开抖音或 B 站视频页</li>
-    <li><span>2</span>点击右下角粉色评论按钮</li>
-    <li><span>3</span>在原评论旁点「外评」可锚定回复</li>
+    <li><span>2</span>点右下角粉色按钮展开面板</li>
+    <li><span>3</span>原评论旁点「外评」可锚定回复</li>
   </ol>
 
-  <footer>评论仅保存在当前浏览器</footer>
+  <footer>评论只保存在当前浏览器，换机不同步</footer>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
-    min-width: 292px;
-    max-width: 292px;
+    min-width: 300px;
+    max-width: 300px;
     font-family:
-      'Avenir Next',
-      'Segoe UI',
       'PingFang SC',
       'Hiragino Sans GB',
       'Microsoft YaHei',
+      'Segoe UI',
+      system-ui,
       sans-serif;
     background: #fff;
-    color: #1c1d22;
+    color: #18191c;
   }
 
   .shell {
-    padding: 1rem;
+    padding: 14px;
     display: grid;
-    gap: 0.8rem;
+    gap: 12px;
   }
 
   .head {
@@ -81,54 +84,74 @@
     align-items: center;
   }
 
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: #fb7299;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgb(251 114 153 / 30%);
+  }
+
   h1 {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 15px;
     font-weight: 650;
   }
 
   .head p {
-    margin: 0.14rem 0 0;
-    font-size: 0.7rem;
-    color: #8c8982;
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: #9499a0;
   }
 
   .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #0f8a72;
-    box-shadow: 0 0 0 4px #e4f3ef;
+    background: #fb7299;
+    box-shadow: 0 0 0 4px #fff0f3;
   }
 
   .stat {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    padding: 0.65rem 0.75rem;
-    border-radius: 10px;
-    background: #f5f4f1;
-    color: #6b6862;
-    font-size: 0.76rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #f1f2f3;
+    color: #61666d;
+    font-size: 12px;
   }
 
   .stat strong {
-    font-size: 1.1rem;
+    font-size: 18px;
     font-weight: 700;
-    color: #1c1d22;
+    color: #18191c;
+    font-variant-numeric: tabular-nums;
   }
 
   .stat strong.muted {
-    color: #9a968e;
+    color: #9499a0;
   }
 
   .err-banner {
     margin: 0;
-    padding: 0.55rem 0.7rem;
+    padding: 8px 10px;
     border-radius: 8px;
-    background: #fdecea;
-    color: #b42318;
-    font-size: 0.78rem;
+    background: #fff0f0;
+    color: #f85a54;
+    font-size: 12px;
     line-height: 1.4;
   }
 
@@ -137,15 +160,15 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.55rem;
+    gap: 8px;
   }
 
   .steps li {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    font-size: 0.76rem;
-    color: #4d4b46;
+    gap: 8px;
+    font-size: 12px;
+    color: #61666d;
   }
 
   .steps span {
@@ -154,16 +177,16 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: #e4f3ef;
-    color: #0f6b5c;
-    font-size: 0.66rem;
+    background: #fff0f3;
+    color: #fb7299;
+    font-size: 11px;
     font-weight: 700;
   }
 
   footer {
-    padding-top: 0.65rem;
-    border-top: 1px solid #efede8;
-    font-size: 0.68rem;
-    color: #9a968e;
+    padding-top: 10px;
+    border-top: 1px solid #e3e5e7;
+    font-size: 11px;
+    color: #9499a0;
   }
 </style>

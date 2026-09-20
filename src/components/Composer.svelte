@@ -5,21 +5,27 @@
     target: ReplyTarget | null;
     disabled?: boolean;
     autofocus?: boolean;
+    author: string;
     onSubmit: (body: string) => Promise<void> | void;
     onClearTarget: () => void;
+    onAuthorChange: (name: string) => Promise<void> | void;
   }
 
   let {
     target,
     disabled = false,
     autofocus = false,
+    author,
     onSubmit,
     onClearTarget,
+    onAuthorChange,
   }: Props = $props();
 
   let body = $state('');
   let busy = $state(false);
   let error = $state('');
+  let editingAuthor = $state(false);
+  let draftAuthor = $state('');
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   function label(t: ReplyTarget | null): string {
@@ -30,20 +36,39 @@
   }
 
   $effect(() => {
-    // 打开面板或切换回复目标时，把光标放进输入框
     if (autofocus && !disabled) {
       queueMicrotask(() => textareaEl?.focus());
     }
   });
 
   $effect(() => {
-    // 仅依赖 target 变化以触发聚焦
     void target?.kind;
     void target?.targetId;
     if (!disabled && target && target.kind !== 'video') {
       queueMicrotask(() => textareaEl?.focus());
     }
   });
+
+  function startEditAuthor() {
+    draftAuthor = author;
+    editingAuthor = true;
+  }
+
+  async function commitAuthor() {
+    editingAuthor = false;
+    await onAuthorChange(draftAuthor);
+  }
+
+  function onAuthorKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void commitAuthor();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      editingAuthor = false;
+    }
+  }
 
   async function submit() {
     if (!body.trim() || busy || disabled) return;
@@ -82,6 +107,22 @@
   {/if}
 
   <div class="box">
+    <div class="identity">
+      {#if editingAuthor}
+        <input
+          class="author-input"
+          maxlength="24"
+          bind:value={draftAuthor}
+          onkeydown={onAuthorKeydown}
+          onblur={() => void commitAuthor()}
+          aria-label="昵称"
+        />
+      {:else}
+        <button type="button" class="author" onclick={startEditAuthor} title="改昵称">
+          {author}
+        </button>
+      {/if}
+    </div>
     <textarea
       bind:this={textareaEl}
       rows="2"
@@ -169,6 +210,38 @@
     padding: 10px 12px;
     border-radius: 6px;
     background: var(--sc-surface);
+  }
+
+  .identity {
+    display: flex;
+    align-items: center;
+  }
+
+  .author {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: var(--sc-muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .author:hover {
+    color: var(--sc-accent);
+  }
+
+  .author-input {
+    width: 8rem;
+    border: 0;
+    border-bottom: 1px solid var(--sc-accent);
+    background: transparent;
+    color: var(--sc-fg);
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+    padding: 0 0 2px;
   }
 
   textarea {

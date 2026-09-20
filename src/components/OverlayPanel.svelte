@@ -6,6 +6,7 @@
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
   import type { CommentRecord, CommentTreeNode, PageContext, ReplyTarget } from '../lib/db/types';
   import { readPageContext, resolveAdapter } from '../lib/platforms';
+  import { getDefaultAuthor, loadAuthor, saveAuthor } from '../lib/prefs/author';
 
   let open = $state(false);
   let context = $state<PageContext | null>(null);
@@ -16,6 +17,7 @@
   let highlightId = $state<string | null>(null);
   let nativePreviews = $state<Record<string, string>>({});
   let scrollEl = $state<HTMLDivElement | null>(null);
+  let author = $state(getDefaultAuthor());
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
@@ -102,6 +104,7 @@
       platform: context.platform,
       videoId: context.videoId,
       body,
+      author,
       parentId:
         target.kind === 'overlay_comment' ? target.threadRootId ?? target.targetId ?? null : null,
       nativeParentId: target.kind === 'native_comment' ? target.targetId ?? null : null,
@@ -151,6 +154,10 @@
     void setOpen(true);
   }
 
+  async function handleAuthorChange(name: string) {
+    author = await saveAuthor(name);
+  }
+
   function injectNativeButtons() {
     const adapter = resolveAdapter();
     if (!adapter) return;
@@ -179,6 +186,9 @@
       if (previews && typeof previews === 'object') {
         nativePreviews = previews as Record<string, string>;
       }
+    });
+    void loadAuthor().then((name) => {
+      author = name;
     });
     void refreshContext();
     window.addEventListener('keydown', handleKeydown);
@@ -324,8 +334,10 @@
         target={replyTarget}
         disabled={!context}
         autofocus={open}
+        {author}
         onSubmit={handleSubmit}
         onClearTarget={clearReplyTarget}
+        onAuthorChange={handleAuthorChange}
       />
     </aside>
   {/if}
