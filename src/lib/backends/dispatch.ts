@@ -8,12 +8,14 @@ export interface OutboundComment {
   body: string;
   parentId?: string | null;
   pageUrl?: string;
+  commentId?: string;
 }
 
 export interface BackendResult {
   id: BackendId;
   ok: boolean;
   error?: string;
+  eventId?: string;
 }
 
 const BACKENDS_KEY = 'sarcasm_event_backends_v1';
@@ -55,11 +57,13 @@ export async function publishOutbound(event: OutboundComment): Promise<BackendRe
         body: event.body,
         parentCommentId: event.parentId,
         pageUrl: event.pageUrl,
+        localCommentId: event.commentId,
       });
       results.push({
         id,
         ok: published.ok,
         error: published.error,
+        eventId: published.eventId,
       });
     }
   }

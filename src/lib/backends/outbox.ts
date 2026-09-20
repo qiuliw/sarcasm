@@ -167,10 +167,20 @@ export async function flushOutbox(): Promise<number> {
         body: item.body,
         parentId: item.parentId,
         pageUrl: item.pageUrl,
+        commentId: item.commentId,
       });
 
       const failed = results.filter((r) => !r.ok);
       if (!results.length || failed.length === 0) {
+        const eventId = results.find((r) => r.eventId)?.eventId;
+        if (eventId && item.commentId) {
+          try {
+            const { remapCommentId } = await import('../db/sqlite');
+            await remapCommentId(item.commentId, eventId);
+          } catch (err) {
+            console.warn('[sarcasm] remap comment id failed', err);
+          }
+        }
         continue;
       }
 

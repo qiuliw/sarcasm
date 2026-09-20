@@ -52,7 +52,7 @@
 
   function onKeydown(e: KeyboardEvent) {
     // 阻止冒泡到宿主页（否则会触发抖音/B站快捷键）
-    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -67,7 +67,7 @@
   }
 
   function trapKey(e: KeyboardEvent) {
-    e.stopPropagation();
+    e.stopImmediatePropagation();
   }
 
   function cancelReply() {

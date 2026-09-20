@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
+  import { fly, scale } from 'svelte/transition';
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
   import SettingsView from './SettingsView.svelte';
-  import { createComment, deleteComment, getOutboxPending, listComments, voteComment } from '../lib/messaging/api';
+  import { createComment, deleteComment, getOutboxPending, listComments, syncComments, voteComment } from '../lib/messaging/api';
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
   import type {
     CommentRecord,
@@ -12,49 +13,111 @@
     ReplyTarget,
     VoteKind,
   } from '../lib/db/types';
-  import type { AnchorPack } from '../lib/anchors/packs';
   import {
-    loadAllPacks,
+    adapterLabel,
+    getPlatformAdapter,
     observeHref,
-    resolvePageContextSync,
-  } from '../lib/anchors/store';
+    resolvePageContext,
+  } from '../lib/platforms';
   import { OUTBOX_KEY, OUTBOX_TRASH_KEY } from '../lib/backends/outbox';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
+  import {
+    loadUiPrefs,
+    UI_PREFS_KEY,
+    type UiPrefs,
+  } from '../lib/prefs/ui';
   import { loadNostrIdentity, type NostrIdentity } from '../lib/nostr/settings';
 
   let open = $state(false);
+  let rootEl = $state<HTMLDivElement | null>(null);
+  let panelEngaged = $state(false);
   let context = $state<PageContext | null>(null);
   let rows = $state<CommentRecord[]>([]);
   let replyTarget = $state<ReplyTarget>({ kind: 'video' });
   let composerBody = $state('');
   let loading = $state(false);
+  let pulling = $state(false);
   let status = $state('');
   let highlightId = $state<string | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let identity = $state<NostrIdentity | null>(null);
-  let packs = $state<AnchorPack[]>([]);
   let expandedRoots = $state<Record<string, true>>({});
   let view = $state<'feed' | 'settings'>('feed');
   let outboxPending = $state(0);
   let outboxTrash = $state(0);
+  let uiPrefs = $state<UiPrefs>({
+    autoExpandOnComments: true,
+    panelMaxVh: 85,
+  });
+  /** 用户在该视频上手动收起后，不再自动展开，直到换视频 */
+  let collapsedForVideo = $state<string | null>(null);
 
   const forest = $derived(buildCommentForest(rows));
   const commentCount = $derived(rows.length);
   const hasComments = $derived(forest.videoRoots.length > 0);
   const inSettings = $derived(view === 'settings');
   const platformLabel = $derived(
-    packs.find((p) => p.id === context?.platform)?.name || context?.platform || '',
+    (() => {
+      const a = getPlatformAdapter(context?.platform ?? '');
+      return a ? adapterLabel(a) : context?.platform || '';
+    })(),
   );
 
   let stopNav: (() => void) | null = null;
   let highlightTimer: number | undefined;
+  let titleResyncTimers: number[] = [];
   let stopStorage: (() => void) | null = null;
   let stopKeyTrap: (() => void) | null = null;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
-  async function setOpen(value: boolean) {
+
+  function contextKey(ctx: PageContext | null): string | null {
+    return ctx ? `${ctx.platform}:${ctx.videoId}` : null;
+  }
+
+  async function setOpen(value: boolean, source: 'user' | 'auto' = 'user') {
     open = value;
-    if (!value) view = 'feed';
+    if (!value) {
+      view = 'feed';
+      if (source === 'user') {
+        collapsedForVideo = contextKey(context);
+      }
+    } else if (source === 'user') {
+      collapsedForVideo = null;
+    }
     await browser.storage.local.set({ [UI_OPEN_KEY]: value });
+  }
+
+  /** 有评论展开、无评论收纳；用户手动收起后本视频不再自动展开 */
+  async function syncPanelWithComments() {
+    if (!uiPrefs.autoExpandOnComments || !context) return;
+
+    if (commentCount === 0) {
+      // 清空手动收起标记，便于下一条评论再自动展开
+      if (collapsedForVideo === contextKey(context)) {
+        collapsedForVideo = null;
+      }
+      // 正在使用面板时不收纳，避免打断输入/阅读
+      if (open && view !== 'settings' && !isPanelEngaged()) {
+        await setOpen(false, 'auto');
+      }
+      return;
+    }
+
+    if (!open && collapsedForVideo !== contextKey(context)) {
+      await setOpen(true, 'auto');
+    }
+  }
+
+  function isPanelEngaged(): boolean {
+    if (!open) return false;
+    if (panelEngaged) return true;
+    if (!rootEl) return false;
+    const rootNode = rootEl.getRootNode();
+    const active =
+      rootNode instanceof ShadowRoot
+        ? rootNode.activeElement
+        : document.activeElement;
+    return !!active && rootEl.contains(active);
   }
 
   function clearReplyTarget() {
@@ -95,12 +158,18 @@
 
   /** 面板内按键不冒泡到宿主页，避免抖音/B站快捷键 */
   function stopPanelKeyBubble(event: KeyboardEvent) {
-    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  function isTypingTarget(node: EventTarget | null | undefined): boolean {
+    return node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement;
   }
 
   /**
-   * 部分站点在 document 捕获阶段听快捷键，须在 window 捕获阶段先拦住。
-   * 不 preventDefault（除 Enter），以免打字失效。
+   * 抖音等站点常在 document/window 捕获阶段听快捷键。
+   * 须在 window 捕获阶段用 stopImmediatePropagation 拦住，
+   * 否则同级后续监听器仍会收到事件。
+   * 不 preventDefault（除 Enter 发送），以免打字失效。
    */
   function trapPageShortcuts(event: KeyboardEvent) {
     if (!open) return;
@@ -110,13 +179,20 @@
     );
     if (!root) return;
 
-    const t = event.target;
-    if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) return;
+    const shadow =
+      root.getRootNode() instanceof ShadowRoot
+        ? (root.getRootNode() as ShadowRoot)
+        : null;
+    const active = shadow?.activeElement ?? document.activeElement;
+    const typing =
+      path.some((n) => isTypingTarget(n)) || isTypingTarget(active);
+    if (!typing) return;
 
-    event.stopPropagation();
+    event.stopImmediatePropagation();
 
     if (event.type !== 'keydown') return;
-    if (event.key === 'Enter' && t instanceof HTMLInputElement) {
+    const input = path.find((n): n is HTMLInputElement => n instanceof HTMLInputElement);
+    if (event.key === 'Enter' && input && input.closest('.composer')) {
       event.preventDefault();
       root.querySelector<HTMLButtonElement>('.composer button.send:not(:disabled)')?.click();
     }
@@ -127,7 +203,7 @@
   }
 
   async function refreshContext() {
-    const next = resolvePageContextSync(packs, document, location.href);
+    const next = resolvePageContext(document, location.href);
     const switched =
       context?.platform !== next?.platform || context?.videoId !== next?.videoId;
 
@@ -140,8 +216,30 @@
     if (switched) {
       highlightId = null;
       expandedRoots = {};
+      collapsedForVideo = null;
+      rows = [];
+      pulling = false;
+      for (const t of titleResyncTimers) window.clearTimeout(t);
+      titleResyncTimers = [];
       if (context) {
         await restoreDraftFor(context);
+        // 抖音等站 DOM 标题常滞后于 URL id，短延迟再对齐
+        const id = context.videoId;
+        for (const ms of [200, 600, 1200]) {
+          titleResyncTimers.push(
+            window.setTimeout(() => {
+              if (!context || context.videoId !== id) return;
+              const again = resolvePageContext(document, location.href);
+              if (
+                again?.videoId === id &&
+                again.title &&
+                again.title !== context.title
+              ) {
+                context = { ...context, title: again.title, url: again.url };
+              }
+            }, ms),
+          );
+        }
       } else {
         composerBody = '';
         replyTarget = { kind: 'video' };
@@ -159,16 +257,34 @@
 
   async function reloadComments() {
     if (!context) return;
+    const platform = context.platform;
+    const videoId = context.videoId;
     loading = true;
     try {
-      rows = await listComments({
-        platform: context.platform,
-        videoId: context.videoId,
-      });
+      rows = await listComments({ platform, videoId });
+      await syncPanelWithComments();
     } catch (e) {
       status = e instanceof Error ? e.message : String(e);
-    } finally {
       loading = false;
+      return;
+    }
+    loading = false;
+
+    pulling = true;
+    try {
+      const synced = await syncComments({ platform, videoId });
+      if (context?.platform !== platform || context?.videoId !== videoId) return;
+      rows = synced.comments;
+      if (synced.error) {
+        console.warn('[sarcasm] pull comments', synced.error);
+      }
+      await syncPanelWithComments();
+    } catch (e) {
+      console.warn('[sarcasm] pull comments', e);
+    } finally {
+      if (context?.platform === platform && context?.videoId === videoId) {
+        pulling = false;
+      }
     }
   }
 
@@ -211,7 +327,8 @@
     clearReplyTarget();
     composerBody = '';
     await clearDraft(context.platform, context.videoId);
-    await reloadComments();
+    rows = [...rows, created];
+    await syncPanelWithComments();
     await flashAndScroll(created.id);
     void refreshOutbox();
   }
@@ -253,10 +370,6 @@
     identity = await loadNostrIdentity();
   }
 
-  async function refreshPacks() {
-    packs = await loadAllPacks();
-  }
-
   async function refreshOutbox() {
     try {
       const { count, trash } = await getOutboxPending();
@@ -271,9 +384,12 @@
     void browser.storage.local.get(UI_OPEN_KEY).then((stored) => {
       open = stored[UI_OPEN_KEY] === true;
     });
+    void loadUiPrefs().then((prefs) => {
+      uiPrefs = prefs;
+    });
     void refreshIdentity();
     void refreshOutbox();
-    void refreshPacks().then(() => refreshContext());
+    void refreshContext();
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('keydown', trapPageShortcuts, true);
     window.addEventListener('keyup', trapPageShortcuts, true);
@@ -287,8 +403,11 @@
       if (area !== 'local') return;
       void refreshIdentity();
       if (OUTBOX_KEY in changes || OUTBOX_TRASH_KEY in changes) void refreshOutbox();
-      if ('sarcasm_anchor_packs_v1' in changes) {
-        void refreshPacks().then(() => refreshContext());
+      if (UI_PREFS_KEY in changes) {
+        void loadUiPrefs().then((prefs) => {
+          uiPrefs = prefs;
+          void syncPanelWithComments();
+        });
       }
     };
     browser.storage.onChanged.addListener(onStorage);
@@ -305,12 +424,13 @@
     stopNav?.();
     stopStorage?.();
     stopKeyTrap?.();
+    for (const t of titleResyncTimers) window.clearTimeout(t);
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
 </script>
 
-<div class="root" data-open={open}>
+<div class="root" data-open={open} bind:this={rootEl}>
   {#if !open}
     <button
       type="button"
@@ -320,6 +440,7 @@
       title="打开评论"
       aria-label="打开评论"
       aria-expanded="false"
+      transition:scale|local={{ duration: 220, start: 0.72, opacity: 0 }}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -334,10 +455,26 @@
     <div
       class="panel"
       class:panel-empty={!hasComments && !loading && !inSettings}
+      style:--sc-panel-max={uiPrefs.panelMaxVh}
       onkeydown={stopPanelKeyBubble}
       onkeyup={stopPanelKeyBubble}
       onkeypress={stopPanelKeyBubble}
+      onpointerenter={() => {
+        panelEngaged = true;
+      }}
+      onpointerleave={() => {
+        panelEngaged = false;
+      }}
+      onfocusin={() => {
+        panelEngaged = true;
+      }}
+      onfocusout={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && rootEl?.contains(next)) return;
+        panelEngaged = false;
+      }}
       role="presentation"
+      transition:fly|local={{ y: 18, duration: 260, opacity: 0 }}
     >
       <header class="head">
         <div class="context">
@@ -345,7 +482,7 @@
             <div class="context-line">
               <strong class="title">设置</strong>
             </div>
-            <span class="vid">身份 · 同步 · 锚点</span>
+            <span class="vid">身份 · 同步</span>
           {:else if context}
             <div class="context-line">
               <strong class="title" title={context.title || context.videoId}>
@@ -429,20 +566,21 @@
             onSaved={() => {
               void refreshIdentity();
               void refreshOutbox();
-              void refreshPacks().then(() => refreshContext());
+              void refreshContext();
             }}
           />
         </div>
       {:else}
-        <div class="scroll" class:scroll-empty={!hasComments} bind:this={scrollEl}>
-          {#if loading}
-            <p class="empty">加载中…</p>
-          {:else if !context}
+        <div class="scroll" class:scroll-empty={!hasComments && !pulling} bind:this={scrollEl}>
+          {#if pulling}
+            <div class="pull-hint" aria-live="polite">同步中…</div>
+          {/if}
+          {#if !context}
             <p class="empty">打开具体视频页后再说</p>
           {:else if !identity?.configured}
             <p class="empty">点右上角齿轮配置 Nostr 密钥后再发评。</p>
           {:else if !hasComments}
-            <p class="empty">还没有评论，来说两句吧</p>
+            <p class="empty">{loading ? '加载中…' : '还没有评论，来说两句吧'}</p>
           {:else}
             <section class="section">
               <div class="list">
@@ -589,7 +727,7 @@
     right: 24px;
     bottom: 40px;
     width: clamp(300px, 80vw, 400px);
-    max-height: min(85vh, calc(100vh - 56px));
+    max-height: min(calc(var(--sc-panel-max, 85) * 1vh), calc(100vh - 56px));
     height: auto;
     z-index: 2147483645;
     display: flex;
@@ -599,14 +737,17 @@
     background: var(--sc-panel);
     box-shadow: var(--sc-shadow);
     overflow: hidden;
-    transition: box-shadow 180ms ease;
+    transform-origin: bottom right;
+    transition:
+      box-shadow 180ms ease,
+      max-height 180ms ease;
   }
 
   @media (max-height: 720px) {
     .panel {
       bottom: 16px;
       right: 12px;
-      max-height: calc(100vh - 24px);
+      max-height: min(calc(var(--sc-panel-max, 85) * 1vh), calc(100vh - 24px));
     }
 
     .fab {
@@ -713,8 +854,10 @@
   }
 
   .settings-scroll {
-    max-height: min(70vh, 640px);
+    max-height: none;
     flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
   }
 
   .status {
@@ -724,10 +867,18 @@
     color: var(--sc-warn);
   }
 
+  .pull-hint {
+    margin: 0 0 2px;
+    padding: 2px 0 0;
+    color: var(--sc-accent);
+    font-size: 11px;
+    text-align: center;
+  }
+
   .scroll {
     flex: 1 1 auto;
     min-height: 0;
-    max-height: min(58vh, 560px);
+    max-height: none;
     overflow: auto;
     padding: 4px 16px 8px;
     background: var(--sc-panel);
@@ -757,6 +908,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .fab,
+    .panel,
     .icon-button {
       transition: none;
     }

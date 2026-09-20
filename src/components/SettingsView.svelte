@@ -1,17 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    clearCustomAnchorPacks,
+    clearCommentsCacheApi,
     clearNostrKeyApi,
     clearOutboxTrashApi,
-    exportAnchorPacks,
     exportNostrKeyApi,
     generateNostrKeyApi,
     getEnabledBackends,
     getNostrSettings,
-    importAnchorPacks,
+    getStats,
     importNostrKeyApi,
-    listAnchorPacks,
     listOutboxTrash,
     resetAllConfigApi,
     retryOutboxTrashApi,
@@ -24,9 +22,18 @@
     identityFromSettings,
     type NostrSettings,
   } from '../lib/nostr/settings';
-  import type { AnchorPack } from '../lib/anchors/packs';
+  import { adapterLabel, listPlatformAdapters } from '../lib/platforms';
   import { availableBackends, type BackendId } from '../lib/backends/dispatch';
   import type { OutboxTrashItem } from '../lib/backends/outbox';
+  import {
+    clampPanelMaxVh,
+    loadUiPrefs,
+    PANEL_MAX_VH_MAX,
+    PANEL_MAX_VH_MIN,
+    PANEL_MAX_VH_STEP,
+    saveUiPrefs,
+    type UiPrefs,
+  } from '../lib/prefs/ui';
 
   interface Props {
     compact?: boolean;
@@ -43,39 +50,61 @@
   }: Props = $props();
 
   let settings = $state<NostrSettings | null>(null);
+  let uiPrefs = $state<UiPrefs>({
+    autoExpandOnComments: true,
+    panelMaxVh: 85,
+  });
   let nsecInput = $state('');
   let exportedNsec = $state('');
   let showExport = $state(false);
   let showImport = $state(false);
   let showSync = $state(false);
-  let showAnchors = $state(false);
+  let showPlatforms = $state(false);
   let showTrash = $state(false);
   let trashItems = $state<OutboxTrashItem[]>([]);
   let confirmReset = $state(false);
-  let rulesPanel = $state<'export' | 'import' | null>(null);
+  let confirmClearCache = $state(false);
+  let cacheCount = $state<number | null>(null);
+  let cacheBytes = $state<number | null>(null);
   let relayText = $state(DEFAULT_RELAYS.join('\n'));
   let status = $state('');
   let error = $state('');
   let busy = $state(false);
   let enabledBackends = $state<BackendId[]>(['nostr']);
-  let packs = $state<AnchorPack[]>([]);
-  let customCount = $state(0);
-  let packJson = $state('');
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
   const backends = availableBackends();
+  const platforms = listPlatformAdapters();
   let displayNameDraft = $state('');
 
   async function refresh() {
     settings = await getNostrSettings();
+    uiPrefs = await loadUiPrefs();
     displayNameDraft = settings.displayName;
     relayText = settings.relays.join('\n');
     nsecInput = '';
     enabledBackends = await getEnabledBackends();
-    const listed = await listAnchorPacks();
-    packs = listed.all;
-    customCount = listed.custom.length;
+    try {
+      const stats = await getStats();
+      cacheCount = stats.count;
+      cacheBytes = stats.bytes;
+    } catch {
+      cacheCount = null;
+      cacheBytes = null;
+    }
   }
+
+  function formatBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  const cacheSizeLabel = $derived(
+    cacheCount === null || cacheBytes === null
+      ? '…'
+      : `${cacheCount} 条 · ${formatBytes(cacheBytes)}`,
+  );
 
   function parseRelays(text: string): string[] {
     return text
@@ -131,33 +160,6 @@
     }
   }
 
-  async function exportRules() {
-    busy = true;
-    error = '';
-    status = '';
-    try {
-      packJson = await exportAnchorPacks(true);
-      showAnchors = true;
-      rulesPanel = 'export';
-      status = '已导出';
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    } finally {
-      busy = false;
-    }
-  }
-
-  function toggleRulesImport() {
-    showAnchors = true;
-    if (rulesPanel === 'import') {
-      rulesPanel = null;
-      packJson = '';
-      return;
-    }
-    rulesPanel = 'import';
-    packJson = '';
-  }
-
   async function openTrash(e: MouseEvent) {
     e.stopPropagation();
     showSync = true;
@@ -187,7 +189,7 @@
   {#if !compact}
     <header class="intro">
       <h1>设置</h1>
-      <p>身份、同步与锚点规则。</p>
+      <p>身份与同步。</p>
     </header>
   {/if}
 
@@ -324,6 +326,80 @@
         确认导入
       </button>
     {/if}
+  </section>
+
+  <section class="card">
+    <h2>面板</h2>
+    <div class="pref-row">
+      <span class="pref-label">有评论时自动开关</span>
+      <div class="capsule" role="group" aria-label="有评论时自动开关">
+        <button
+          type="button"
+          class="capsule-opt"
+          class:on={uiPrefs.autoExpandOnComments}
+          disabled={busy}
+          onclick={() => {
+            if (uiPrefs.autoExpandOnComments) return;
+            uiPrefs = { ...uiPrefs, autoExpandOnComments: true };
+            void run(async () => {
+              await saveUiPrefs(uiPrefs);
+            }, '已保存');
+          }}
+        >
+          开
+        </button>
+        <button
+          type="button"
+          class="capsule-opt"
+          class:on={!uiPrefs.autoExpandOnComments}
+          disabled={busy}
+          onclick={() => {
+            if (!uiPrefs.autoExpandOnComments) return;
+            uiPrefs = { ...uiPrefs, autoExpandOnComments: false };
+            void run(async () => {
+              await saveUiPrefs(uiPrefs);
+            }, '已保存');
+          }}
+        >
+          关
+        </button>
+      </div>
+    </div>
+
+    <div class="pref-stack">
+      <div class="pref-row">
+        <span class="pref-label">最大高度</span>
+        <span class="pref-value">{uiPrefs.panelMaxVh}%</span>
+      </div>
+      <div class="range-wrap">
+        <input
+          type="range"
+          class="pref-range"
+          min={PANEL_MAX_VH_MIN}
+          max={PANEL_MAX_VH_MAX}
+          step={PANEL_MAX_VH_STEP}
+          aria-label="面板最大高度"
+          disabled={busy}
+          value={uiPrefs.panelMaxVh}
+          oninput={(e) => {
+            const v = clampPanelMaxVh((e.currentTarget as HTMLInputElement).value);
+            uiPrefs = { ...uiPrefs, panelMaxVh: v };
+            void saveUiPrefs(uiPrefs);
+          }}
+          onchange={() => {
+            status = '已保存';
+            error = '';
+          }}
+        />
+        <div class="range-marks" aria-hidden="true">
+          {#each [PANEL_MAX_VH_MIN, 60, 80, PANEL_MAX_VH_MAX] as mark}
+            <span style:left={`${((mark - PANEL_MAX_VH_MIN) / (PANEL_MAX_VH_MAX - PANEL_MAX_VH_MIN)) * 100}%`}>
+              {mark}
+            </span>
+          {/each}
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="card">
@@ -490,108 +566,86 @@
     <button
       type="button"
       class="card-toggle"
-      onclick={() => (showAnchors = !showAnchors)}
-      aria-expanded={showAnchors}
+      onclick={() => (showPlatforms = !showPlatforms)}
+      aria-expanded={showPlatforms}
     >
-      <h2>锚点规则</h2>
+      <h2>支持的平台</h2>
       <span class="toggle-meta">
-        {#if packs.length > 0}
-          <span class="pending muted-count">{packs.length}</span>
-        {/if}
-        <span class="chevron" class:open={showAnchors}>›</span>
+        <span class="pending muted-count">{platforms.length}</span>
+        <span class="chevron" class:open={showPlatforms}>›</span>
       </span>
     </button>
 
-    {#if showAnchors}
+    {#if showPlatforms}
       <ul class="pack-list">
-        {#each packs as pack (pack.id)}
+        {#each platforms as p (p.id)}
           <li>
-            <strong>{pack.name}</strong>
-            <code>{pack.id}</code>
+            <strong>{adapterLabel(p)}</strong>
           </li>
         {/each}
       </ul>
+    {/if}
+  </section>
+
+  <section class="card danger-card">
+    <h2>评论缓存</h2>
+    <p class="cache-size">当前占用 <strong>{cacheSizeLabel}</strong></p>
+    {#if !confirmClearCache}
+      <p class="hint">删除本机已缓存的评论数据，不影响 Nostr 上的内容；之后可重新拉取。</p>
+      <button
+        type="button"
+        class="ghost danger"
+        disabled={busy}
+        onclick={() => {
+          confirmClearCache = true;
+          confirmReset = false;
+          status = '';
+          error = '';
+        }}
+      >
+        清空评论缓存
+      </button>
+    {:else}
+      <p class="hint warn">将删除本机全部评论缓存，此操作不可撤销。</p>
       <div class="actions">
         <button
           type="button"
-          class="ghost"
-          class:active={rulesPanel === 'export'}
+          class="danger-fill"
           disabled={busy}
-          onclick={() => void exportRules()}
-        >
-          导出
-        </button>
-        <button
-          type="button"
-          class="ghost"
-          class:active={rulesPanel === 'import'}
-          disabled={busy}
-          onclick={toggleRulesImport}
-        >
-          导入
-        </button>
-        <button
-          type="button"
-          class="ghost"
-          disabled={busy || customCount === 0}
           onclick={() =>
             void run(async () => {
-              rulesPanel = null;
-              packJson = '';
-              await clearCustomAnchorPacks();
-            }, '已重置')}
+              const n = await clearCommentsCacheApi();
+              confirmClearCache = false;
+              return n;
+            }, '评论缓存已清空')}
         >
-          重置
+          确认清空
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy}
+          onclick={() => {
+            confirmClearCache = false;
+          }}
+        >
+          取消
         </button>
       </div>
-      {#if rulesPanel === 'export'}
-        <label class="field">
-          <span>JSON</span>
-          <textarea rows={compact ? 4 : 6} readonly value={packJson}></textarea>
-        </label>
-        <button
-          type="button"
-          class="ghost"
-          disabled={busy || !packJson.trim()}
-          onclick={() => void copyText(packJson, '已复制到剪贴板')}
-        >
-          复制
-        </button>
-      {:else if rulesPanel === 'import'}
-        <label class="field">
-          <span>JSON</span>
-          <textarea
-            rows={compact ? 4 : 6}
-            bind:value={packJson}
-            placeholder="粘贴规则 JSON"
-          ></textarea>
-        </label>
-        <button
-          type="button"
-          disabled={busy || !packJson.trim()}
-          onclick={() =>
-            void run(async () => {
-              await importAnchorPacks(packJson);
-              packJson = '';
-              rulesPanel = null;
-            }, '已导入')}
-        >
-          确认导入
-        </button>
-      {/if}
     {/if}
   </section>
 
   <section class="card danger-card">
     <h2>重置</h2>
     {#if !confirmReset}
-      <p class="hint">清除身份、同步、锚点与草稿，不删除本机评论。</p>
+      <p class="hint">清除身份、同步、面板偏好与草稿，不删除本机评论。</p>
       <button
         type="button"
         class="ghost danger"
         disabled={busy}
         onclick={() => {
           confirmReset = true;
+          confirmClearCache = false;
           status = '';
           error = '';
         }}
@@ -599,7 +653,7 @@
         重置所有配置
       </button>
     {:else}
-      <p class="hint warn">将清除密钥与自定义规则，此操作不可撤销。</p>
+      <p class="hint warn">将清除密钥与同步配置，此操作不可撤销。</p>
       <div class="actions">
         <button
           type="button"
@@ -611,12 +665,10 @@
               confirmReset = false;
               showImport = false;
               showSync = false;
-              showAnchors = false;
+              showPlatforms = false;
               showExport = false;
               exportedNsec = '';
               nsecInput = '';
-              rulesPanel = null;
-              packJson = '';
             }, '配置已重置')}
         >
           确认重置
@@ -718,6 +770,18 @@
     margin: 0;
     font-size: 12px;
     color: var(--sc-faint, #9499a0);
+  }
+
+  .cache-size {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: var(--sc-muted, #61666d);
+  }
+
+  .cache-size strong {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--sc-fg, #18191c);
   }
 
   .pending {
@@ -861,6 +925,153 @@
     color: var(--sc-muted, #61666d);
   }
 
+  .pref-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .pref-label {
+    font-size: 12px;
+    color: var(--sc-muted, #61666d);
+  }
+
+  .pref-stack {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .pref-value {
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--sc-fg, #18191c);
+  }
+
+  .pref-range {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 18px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .pref-range:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .pref-range:focus {
+    outline: none;
+  }
+
+  .pref-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgb(251 114 153 / 28%);
+  }
+
+  .pref-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px rgb(251 114 153 / 28%);
+  }
+
+  .pref-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: #e3e5e7;
+  }
+
+  .pref-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: var(--sc-accent, #fb7299);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
+  }
+
+  .pref-range::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: #e3e5e7;
+    border: 0;
+  }
+
+  .pref-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: var(--sc-accent, #fb7299);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 16%);
+  }
+
+  .range-wrap {
+    display: grid;
+    gap: 4px;
+  }
+
+  .range-marks {
+    position: relative;
+    height: 14px;
+    margin: 0 8px;
+  }
+
+  .range-marks span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--sc-faint, #9499a0);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .range-marks span:first-child {
+    transform: translateX(0);
+  }
+
+  .range-marks span:last-child {
+    transform: translateX(-100%);
+  }
+
+  .capsule {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 999px;
+    background: #f1f2f3;
+    flex-shrink: 0;
+  }
+
+  .capsule-opt {
+    border: 0;
+    border-radius: 999px;
+    padding: 4px 12px;
+    background: transparent;
+    color: var(--sc-faint, #9499a0);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .capsule-opt.on {
+    background: #fff;
+    color: var(--sc-fg, #18191c);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  }
+
+  .capsule-opt:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
   .actions {
     display: flex;
     gap: 8px;
@@ -894,16 +1105,11 @@
 
   .pack-list li {
     display: flex;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
-    gap: 6px;
-    align-items: baseline;
     font-size: 12px;
     color: var(--sc-muted, #61666d);
-  }
-
-  .pack-list code {
-    font-size: 11px;
-    color: var(--sc-accent, #fb7299);
   }
 
   button {

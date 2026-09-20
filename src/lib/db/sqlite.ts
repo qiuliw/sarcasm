@@ -192,6 +192,113 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
   return record;
 }
 
+/** 远程评论写入；若带本地 id 或同内容本机稿，则合并为 event id，避免重复 */
+export async function absorbRemoteComment(
+  record: CommentRecord,
+  localIdHint?: string | null,
+): Promise<'inserted' | 'merged' | 'skipped'> {
+  await ensureDb();
+  const database = await open();
+
+  const byEvent = queryAll(database, `SELECT id FROM comments WHERE id = ?`, [record.id]);
+  if (byEvent[0]) return 'skipped';
+
+  let localId: string | null = null;
+  if (localIdHint) {
+    const byLocal = queryAll(database, `SELECT id FROM comments WHERE id = ?`, [localIdHint]);
+    if (byLocal[0]) localId = localIdHint;
+  }
+  if (!localId) {
+    const same = queryAll(
+      database,
+      `SELECT id FROM comments
+       WHERE platform = ? AND video_id = ? AND body = ? AND id != ?
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [record.platform, record.videoId, record.body, record.id],
+    );
+    if (same[0]) localId = same[0].id;
+  }
+
+  if (localId) {
+    const local = queryAll(database, `SELECT * FROM comments WHERE id = ?`, [localId])[0];
+    database.run(`UPDATE comments SET parent_id = ? WHERE parent_id = ?`, [
+      record.id,
+      localId,
+    ]);
+    database.run(`DELETE FROM comments WHERE id = ?`, [localId]);
+    database.run(
+      `INSERT INTO comments
+        (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
+         likes, dislikes, my_vote, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        record.id,
+        record.platform,
+        record.videoId,
+        record.parentId,
+        record.nativeParentId,
+        record.replyToAuthor,
+        record.author,
+        record.body,
+        local?.likes ?? 0,
+        local?.dislikes ?? 0,
+        local?.myVote ?? null,
+        record.createdAt,
+        Date.now(),
+      ],
+    );
+    await persist();
+    return 'merged';
+  }
+
+  database.run(
+    `INSERT INTO comments
+      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
+       likes, dislikes, my_vote, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      record.id,
+      record.platform,
+      record.videoId,
+      record.parentId,
+      record.nativeParentId,
+      record.replyToAuthor,
+      record.author,
+      record.body,
+      record.likes,
+      record.dislikes,
+      record.myVote,
+      record.createdAt,
+      record.updatedAt,
+    ],
+  );
+  await persist();
+  return 'inserted';
+}
+
+/** @deprecated 使用 absorbRemoteComment */
+export async function upsertRemoteComment(record: CommentRecord): Promise<boolean> {
+  const r = await absorbRemoteComment(record);
+  return r === 'inserted';
+}
+
+/** 本地 uuid 对齐为 Nostr event id，避免拉取后重复 */
+export async function remapCommentId(fromId: string, toId: string): Promise<void> {
+  if (!fromId || !toId || fromId === toId) return;
+  await ensureDb();
+  const database = await open();
+  const target = queryAll(database, `SELECT id FROM comments WHERE id = ?`, [toId]);
+  if (target[0]) {
+    database.run(`UPDATE comments SET parent_id = ? WHERE parent_id = ?`, [toId, fromId]);
+    database.run(`DELETE FROM comments WHERE id = ?`, [fromId]);
+  } else {
+    database.run(`UPDATE comments SET parent_id = ? WHERE parent_id = ?`, [toId, fromId]);
+    database.run(`UPDATE comments SET id = ? WHERE id = ?`, [toId, fromId]);
+  }
+  await persist();
+}
+
 export async function voteComment(input: VoteCommentInput): Promise<CommentRecord> {
   await ensureDb();
   const database = await open();
@@ -239,6 +346,18 @@ export async function deleteComment(id: string): Promise<void> {
     database.run(`DELETE FROM comments WHERE id = ?`, [rid]);
   }
   await persist();
+}
+
+export async function clearAllComments(): Promise<number> {
+  await ensureDb();
+  const database = await open();
+  const stmt = database.prepare(`SELECT COUNT(*) AS c FROM comments`);
+  stmt.step();
+  const before = Number(stmt.getAsObject().c ?? 0);
+  stmt.free();
+  database.run(`DELETE FROM comments`);
+  await persist();
+  return before;
 }
 
 export async function countAll(): Promise<number> {

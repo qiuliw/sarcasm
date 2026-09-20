@@ -1,8 +1,8 @@
 {
   "name": "sarcasm",
-  "description": "B站 / 抖音外挂评论面板：本机 SQLite 存储，可选 Nostr 同步",
+  "description": "B站 / 抖音外挂评论面板：Nostr 同步",
   "private": false,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "author": "qiuliw",

@@ -8,7 +8,6 @@ import type {
   VoteKind,
 } from '../db/types';
 import type { NostrIdentity, NostrSettings } from '../nostr/settings';
-import type { AnchorPack } from '../anchors/packs';
 import type { BackendId } from '../backends/dispatch';
 import type { OutboxTrashItem } from '../backends/outbox';
 
@@ -16,6 +15,7 @@ export type BgRequest =
   | { type: 'ping' }
   | { type: 'open_options' }
   | { type: 'list_comments'; query: ListCommentsQuery }
+  | { type: 'sync_comments'; query: ListCommentsQuery }
   | { type: 'create_comment'; input: CreateCommentInput }
   | { type: 'delete_comment'; id: string }
   | { type: 'vote_comment'; input: VoteCommentInput }
@@ -34,10 +34,7 @@ export type BgRequest =
   | { type: 'nostr_clear_key' }
   | { type: 'backends_get' }
   | { type: 'backends_set'; ids: BackendId[] }
-  | { type: 'anchors_list' }
-  | { type: 'anchors_export'; includeBuiltin?: boolean }
-  | { type: 'anchors_import'; json: string }
-  | { type: 'anchors_clear_custom' }
+  | { type: 'clear_comments_cache' }
   | { type: 'reset_all_config' };
 
 export type BgResponse =
@@ -60,6 +57,12 @@ export function listComments(query: ListCommentsQuery): Promise<CommentRecord[]>
   return sendBg({ type: 'list_comments', query });
 }
 
+export function syncComments(
+  query: ListCommentsQuery,
+): Promise<{ fetched: number; imported: number; error?: string; comments: CommentRecord[] }> {
+  return sendBg({ type: 'sync_comments', query });
+}
+
 export function createComment(input: CreateCommentInput): Promise<CommentRecord> {
   return sendBg({ type: 'create_comment', input });
 }
@@ -72,7 +75,7 @@ export function voteComment(id: string, vote: VoteKind): Promise<CommentRecord> 
   return sendBg({ type: 'vote_comment', input: { id, vote } });
 }
 
-export function getStats(): Promise<{ count: number }> {
+export function getStats(): Promise<{ count: number; bytes: number }> {
   return sendBg({ type: 'stats' });
 }
 
@@ -137,22 +140,10 @@ export function setEnabledBackends(ids: BackendId[]): Promise<BackendId[]> {
   return sendBg({ type: 'backends_set', ids });
 }
 
-export function listAnchorPacks(): Promise<{ all: AnchorPack[]; custom: AnchorPack[] }> {
-  return sendBg({ type: 'anchors_list' });
-}
-
-export function exportAnchorPacks(includeBuiltin = true): Promise<string> {
-  return sendBg({ type: 'anchors_export', includeBuiltin });
-}
-
-export function importAnchorPacks(json: string): Promise<AnchorPack[]> {
-  return sendBg({ type: 'anchors_import', json });
-}
-
-export function clearCustomAnchorPacks(): Promise<AnchorPack[]> {
-  return sendBg({ type: 'anchors_clear_custom' });
-}
-
 export function resetAllConfigApi(): Promise<void> {
   return sendBg({ type: 'reset_all_config' });
+}
+
+export function clearCommentsCacheApi(): Promise<number> {
+  return sendBg({ type: 'clear_comments_cache' });
 }

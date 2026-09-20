@@ -1,8 +1,10 @@
 import {
+  clearAllComments,
   countAll,
   createComment,
   deleteComment,
   ensureDb,
+  exportDbBytes,
   listComments,
   voteComment,
 } from '../lib/db/sqlite';
@@ -23,13 +25,6 @@ import {
   outboxTrashList,
   retryOutboxTrash,
 } from '../lib/backends/outbox';
-import {
-  exportPacksJson,
-  importPacksJson,
-  loadAllPacks,
-  loadCustomPacks,
-  saveCustomPacks,
-} from '../lib/anchors/store';
 import {
   clearNostrKey,
   exportNostrKey,
@@ -76,6 +71,12 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true };
     case 'list_comments':
       return { ok: true, data: await listComments(message.query) };
+    case 'sync_comments': {
+      const { pullCommentsFromNostr } = await import('../lib/nostr/fetch');
+      const pulled = await pullCommentsFromNostr(message.query);
+      const rows = await listComments(message.query);
+      return { ok: true, data: { ...pulled, comments: rows } };
+    }
     case 'create_comment': {
       const identity = await loadNostrIdentity();
       if (!identity.configured) {
@@ -105,6 +106,10 @@ async function handle(message: BgRequest): Promise<BgResponse> {
         const results = await publishOutbound(payload);
         for (const r of results) {
           if (!r.ok) console.warn(`[sarcasm] backend ${r.id} failed`, r.error);
+          else if (r.eventId) {
+            const { remapCommentId } = await import('../lib/db/sqlite');
+            await remapCommentId(record.id, r.eventId);
+          }
         }
       }
 
@@ -115,8 +120,10 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true };
     case 'vote_comment':
       return { ok: true, data: await voteComment(message.input) };
-    case 'stats':
-      return { ok: true, data: { count: await countAll() } };
+    case 'stats': {
+      const bytes = (await exportDbBytes()).byteLength;
+      return { ok: true, data: { count: await countAll(), bytes } };
+    }
     case 'outbox_pending':
       return {
         ok: true,
@@ -152,21 +159,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await loadEnabledBackends() };
     case 'backends_set':
       return { ok: true, data: await saveEnabledBackends(message.ids) };
-    case 'anchors_list':
-      return {
-        ok: true,
-        data: {
-          all: await loadAllPacks(),
-          custom: await loadCustomPacks(),
-        },
-      };
-    case 'anchors_export':
-      return { ok: true, data: await exportPacksJson(message.includeBuiltin !== false) };
-    case 'anchors_import':
-      return { ok: true, data: await importPacksJson(message.json) };
-    case 'anchors_clear_custom':
-      await saveCustomPacks([]);
-      return { ok: true, data: [] };
+    case 'clear_comments_cache':
+      return { ok: true, data: await clearAllComments() };
     case 'reset_all_config':
       await resetAllConfig();
       return { ok: true };

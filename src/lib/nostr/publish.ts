@@ -10,6 +10,8 @@ export interface PublishCommentInput {
   body: string;
   parentCommentId?: string | null;
   pageUrl?: string;
+  /** 本机评论 id，写入 tag 便于对端去重 / 本机 remap */
+  localCommentId?: string;
 }
 
 export interface PublishResult {
@@ -52,6 +54,9 @@ export async function publishCommentToNostr(
     };
     if (input.parentCommentId) {
       template.tags.push(['e', input.parentCommentId, '', 'reply']);
+    }
+    if (input.localCommentId) {
+      template.tags.push(['c', input.localCommentId]);
     }
     if (settings.displayName) {
       template.tags.push(['n', settings.displayName]);

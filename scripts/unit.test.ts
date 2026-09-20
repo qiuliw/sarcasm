@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { BUILTIN_PACKS, extractVideoId, packMatches, validatePack } from '../src/lib/anchors/packs';
+import { bilibili, douyin, resolvePageContext } from '../src/lib/platforms';
+import { parseSarcasmBody } from '../src/lib/nostr/fetch';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
 import { applyVote } from '../src/lib/db/vote';
@@ -98,35 +99,44 @@ describe('nostr keys', () => {
   });
 });
 
-describe('anchor packs', () => {
+describe('nostr pull parse', () => {
+  test('strips sarcasm footer from content', () => {
+    expect(parseSarcasmBody('你好\n\n#sarcasm douyin:123')).toBe('你好');
+    expect(parseSarcasmBody('纯文本')).toBe('纯文本');
+  });
+});
+
+describe('platform adapters', () => {
   const emptyDoc = {
     title: 'demo',
     querySelector: () => null,
+    querySelectorAll: () => [],
     documentElement: { innerHTML: '' },
   } as unknown as Document;
 
-  test('bilibili pack extracts BV id', () => {
-    const pack = BUILTIN_PACKS.find((p) => p.id === 'bilibili')!;
+  test('bilibili extracts BV id', () => {
     const url = new URL('https://www.bilibili.com/video/BV1GJ411x7h7/?spm=1');
-    expect(packMatches(pack, url)).toBe(true);
-    expect(extractVideoId(pack, url, emptyDoc)).toBe('BV1GJ411x7h7');
+    expect(bilibili.match(url)).toBe(true);
+    expect(bilibili.resolve(url, emptyDoc)?.videoId).toBe('BV1GJ411x7h7');
   });
 
-  test('douyin pack extracts numeric id', () => {
-    const pack = BUILTIN_PACKS.find((p) => p.id === 'douyin')!;
-    const url = new URL('https://www.douyin.com/video/7123456789012345678');
-    expect(packMatches(pack, url)).toBe(true);
-    expect(extractVideoId(pack, url, emptyDoc)).toBe('7123456789012345678');
+  test('douyin extracts path and modal_id', () => {
+    const pathUrl = new URL('https://www.douyin.com/video/7123456789012345678');
+    expect(douyin.resolve(pathUrl, emptyDoc)?.videoId).toBe('7123456789012345678');
+    const modalUrl = new URL(
+      'https://www.douyin.com/jingxuan?modal_id=7654524171870899499',
+    );
+    expect(douyin.resolve(modalUrl, emptyDoc)?.videoId).toBe('7654524171870899499');
+    expect(douyin.kind).toBe('video');
+    expect(douyin.name).toBe('抖音·视频');
   });
 
-  test('validatePack rejects bad id', () => {
-    expect(() =>
-      validatePack({
-        id: 'Bad ID',
-        name: 'x',
-        hosts: ['a.com'],
-        videoIdRules: [{ from: 'path', pattern: '/(x)' }],
-      }),
-    ).toThrow();
+  test('resolvePageContext picks matching adapter', () => {
+    const ctx = resolvePageContext(
+      emptyDoc,
+      'https://www.bilibili.com/video/BV1GJ411x7h7/',
+    );
+    expect(ctx?.platform).toBe('bilibili');
+    expect(ctx?.videoId).toBe('BV1GJ411x7h7');
   });
 });
