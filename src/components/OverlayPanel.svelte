@@ -13,12 +13,7 @@
     ReplyTarget,
     VoteKind,
   } from '../lib/db/types';
-  import {
-    adapterLabel,
-    getPlatformAdapter,
-    observeHref,
-    resolvePageContext,
-  } from '../lib/platforms';
+  import { observeHref, resolvePageContext } from '../lib/anchors/resolve';
   import { OUTBOX_KEY, OUTBOX_TRASH_KEY } from '../lib/backends/outbox';
   import { clearDraft, isMeaningfulDraft, loadDraft, saveDraft } from '../lib/prefs/draft';
   import {
@@ -56,16 +51,10 @@
   const commentCount = $derived(rows.length);
   const hasComments = $derived(forest.videoRoots.length > 0);
   const inSettings = $derived(view === 'settings');
-  const platformLabel = $derived(
-    (() => {
-      const a = getPlatformAdapter(context?.platform ?? '');
-      return a ? adapterLabel(a) : context?.platform || '';
-    })(),
-  );
+  const platformLabel = $derived(context?.platformName || context?.platform || '');
 
   let stopNav: (() => void) | null = null;
   let highlightTimer: number | undefined;
-  let titleResyncTimers: number[] = [];
   let stopStorage: (() => void) | null = null;
   let stopKeyTrap: (() => void) | null = null;
   const UI_OPEN_KEY = 'sarcasm_panel_open';
@@ -203,7 +192,7 @@
   }
 
   async function refreshContext() {
-    const next = resolvePageContext(document, location.href);
+    const next = await resolvePageContext(location.href);
     const switched =
       context?.platform !== next?.platform || context?.videoId !== next?.videoId;
 
@@ -219,27 +208,8 @@
       collapsedForVideo = null;
       rows = [];
       pulling = false;
-      for (const t of titleResyncTimers) window.clearTimeout(t);
-      titleResyncTimers = [];
       if (context) {
         await restoreDraftFor(context);
-        // 抖音等站 DOM 标题常滞后于 URL id，短延迟再对齐
-        const id = context.videoId;
-        for (const ms of [200, 600, 1200]) {
-          titleResyncTimers.push(
-            window.setTimeout(() => {
-              if (!context || context.videoId !== id) return;
-              const again = resolvePageContext(document, location.href);
-              if (
-                again?.videoId === id &&
-                again.title &&
-                again.title !== context.title
-              ) {
-                context = { ...context, title: again.title, url: again.url };
-              }
-            }, ms),
-          );
-        }
       } else {
         composerBody = '';
         replyTarget = { kind: 'video' };
@@ -424,7 +394,6 @@
     stopNav?.();
     stopStorage?.();
     stopKeyTrap?.();
-    for (const t of titleResyncTimers) window.clearTimeout(t);
     if (highlightTimer) window.clearTimeout(highlightTimer);
     window.removeEventListener('keydown', handleKeydown);
   });
@@ -485,8 +454,8 @@
             <span class="vid">身份 · 同步</span>
           {:else if context}
             <div class="context-line">
-              <strong class="title" title={context.title || context.videoId}>
-                {context.title || context.videoId}
+              <strong class="title" title={context.videoId}>
+                {context.videoId}
               </strong>
               {#if commentCount > 0}
                 <span class="count">{commentCount}</span>

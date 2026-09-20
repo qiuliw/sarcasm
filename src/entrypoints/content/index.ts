@@ -4,8 +4,7 @@ import OverlayPanel from '~/components/OverlayPanel.svelte';
 export default defineContentScript({
   matches: [
     '*://*.bilibili.com/*',
-    '*://www.douyin.com/*',
-    '*://douyin.com/*',
+    '*://*.douyin.com/*',
   ],
   cssInjectionMode: 'ui',
   async main(ctx) {

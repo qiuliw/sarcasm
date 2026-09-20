@@ -2,7 +2,7 @@
   "name": "sarcasm",
   "description": "B站 / 抖音外挂评论面板：Nostr 同步",
   "private": false,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "license": "MIT",
   "author": "qiuliw",

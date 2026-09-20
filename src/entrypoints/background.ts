@@ -10,10 +10,6 @@ import {
 } from '../lib/db/sqlite';
 import type { BgRequest, BgResponse } from '../lib/messaging/api';
 import {
-  loadEnabledBackends,
-  saveEnabledBackends,
-} from '../lib/backends/dispatch';
-import {
   clearOutboxTrash,
   enqueueOutbound,
   ensureOutboxAlarm,
@@ -35,6 +31,13 @@ import {
   saveNostrSettings,
 } from '../lib/nostr/settings';
 import { resetAllConfig } from '../lib/prefs/reset';
+import {
+  exportPacksJson,
+  importPacksJson,
+  loadAllPacks,
+  loadCustomPacks,
+  saveCustomPacks,
+} from '../lib/anchors/store';
 
 export default defineBackground(() => {
   void ensureDb().catch((err) => {
@@ -147,10 +150,21 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await exportNostrKey() };
     case 'nostr_clear_key':
       return { ok: true, data: await clearNostrKey() };
-    case 'backends_get':
-      return { ok: true, data: await loadEnabledBackends() };
-    case 'backends_set':
-      return { ok: true, data: await saveEnabledBackends(message.ids) };
+    case 'anchors_list':
+      return {
+        ok: true,
+        data: {
+          all: await loadAllPacks(),
+          custom: await loadCustomPacks(),
+        },
+      };
+    case 'anchors_export':
+      return { ok: true, data: await exportPacksJson() };
+    case 'anchors_import':
+      return { ok: true, data: await importPacksJson(message.json) };
+    case 'anchors_clear_custom':
+      await saveCustomPacks([]);
+      return { ok: true, data: [] };
     case 'clear_comments_cache':
       return { ok: true, data: await clearAllComments() };
     case 'reset_all_config':

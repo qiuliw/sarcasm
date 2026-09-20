@@ -1,44 +1,28 @@
-import { bilibili } from './bilibili';
-import { douyinVideo } from './douyin';
-import type { PlatformAdapter } from './types';
 import type { PageContext } from '../db/types';
+import { extractVideoId, packMatches, type AnchorPack } from './packs';
+import { loadAllPacks } from './store';
 
-const ADAPTERS: PlatformAdapter[] = [douyinVideo, bilibili];
-
-export function listPlatformAdapters(): PlatformAdapter[] {
-  return [...ADAPTERS];
+export async function resolvePageContext(href = location.href): Promise<PageContext | null> {
+  return resolvePageContextSync(await loadAllPacks(), href);
 }
 
-export function getPlatformAdapter(id: string): PlatformAdapter | undefined {
-  return ADAPTERS.find((a) => a.id === id);
-}
-
-export function resolvePageContext(
-  doc = document,
+export function resolvePageContextSync(
+  packs: AnchorPack[],
   href = location.href,
 ): PageContext | null {
   const url = new URL(href);
-  for (const adapter of ADAPTERS) {
-    if (!adapter.match(url)) continue;
-    const hit = adapter.resolve(url, doc);
-    if (!hit) continue;
+  for (const pack of packs) {
+    if (!packMatches(pack, url)) continue;
+    const videoId = extractVideoId(pack, url);
+    if (!videoId) continue;
     return {
-      platform: adapter.id,
-      videoId: hit.videoId,
-      title: hit.title,
+      platform: pack.id,
+      platformName: pack.name,
+      videoId,
       url: url.href,
     };
   }
   return null;
-}
-
-/** @deprecated 旧签名兼容；适配器已内置，忽略 packs 参数 */
-export function resolvePageContextSync(
-  _packs: unknown,
-  doc = document,
-  href = location.href,
-): PageContext | null {
-  return resolvePageContext(doc, href);
 }
 
 export function observeHref(onChange: () => void, intervalMs = 400): () => void {

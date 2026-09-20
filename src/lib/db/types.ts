@@ -1,10 +1,11 @@
+/** 锚点规则 ID；内置为 bilibili / douyin，也允许用户自定义。 */
 export type Platform = string;
 
 /** 本地点赞状态：赞 / 踩 / 未表态 */
 export type VoteKind = 'up' | 'down';
 
 /** 回复锚点：视频本体 / 外挂评论 */
-export type AnchorKind = 'video' | 'overlay_comment';
+export type ReplyAnchorKind = 'video' | 'overlay_comment';
 
 export interface CommentRecord {
   id: string;
@@ -35,13 +36,13 @@ export interface CommentTreeNode extends CommentRecord {
 
 export interface PageContext {
   platform: Platform;
+  platformName?: string;
   videoId: string;
-  title?: string;
   url: string;
 }
 
 export interface ReplyTarget {
-  kind: AnchorKind;
+  kind: ReplyAnchorKind;
   /** overlay 评论 id */
   targetId?: string;
   /** 外挂楼：一级评论 id（回复二级时仍指向一级） */

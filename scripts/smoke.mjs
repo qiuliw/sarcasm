@@ -51,6 +51,30 @@ async function runCrud(page) {
   assert(relayProbe?.ok, `relay probe request failed: ${JSON.stringify(relayProbe)}`);
   assert(relayProbe.data?.[0]?.error === '仅支持 wss://', 'relay probe validation failed');
 
+  const anchorExport = await send(page, { type: 'anchors_export' });
+  assert(anchorExport?.ok && anchorExport.data.includes('"bilibili"'), 'anchor export failed');
+  const anchorImport = await send(page, {
+    type: 'anchors_import',
+    json: JSON.stringify({
+      schemaVersion: 1,
+      packs: [
+        {
+          id: 'smoke',
+          name: 'Smoke',
+          hosts: ['example.com'],
+          videoIdRules: [
+            { from: 'query', queryKey: 'video', pattern: '^(\\d+)$' },
+          ],
+        },
+      ],
+    }),
+  });
+  assert(anchorImport?.ok, `anchor import failed: ${JSON.stringify(anchorImport)}`);
+  const anchors = await send(page, { type: 'anchors_list' });
+  assert(anchors?.ok && anchors.data.custom.some((pack) => pack.id === 'smoke'), 'anchor list failed');
+  const anchorsCleared = await send(page, { type: 'anchors_clear_custom' });
+  assert(anchorsCleared?.ok, 'anchor reset failed');
+
   const key = await send(page, { type: 'nostr_generate_key' });
   assert(key?.ok, `generate key failed: ${JSON.stringify(key)}`);
   assert(key.data?.nsec, '未生成 nsec');
@@ -230,6 +254,34 @@ async function runContentScriptOnBilibili(browser, extensionId) {
     path: path.join(root, '.output', 'smoke-settings.png'),
     fullPage: false,
   });
+  await page.evaluate(() => {
+    const root = document.querySelector('sarcasm-root')?.shadowRoot;
+    const anchors = [...(root?.querySelectorAll('button.card-toggle') || [])].find((button) =>
+      (button.textContent || '').includes('锚点规则'),
+    );
+    if (anchors instanceof HTMLElement) anchors.click();
+  });
+  await page.waitForFunction(
+    () =>
+      [...(document.querySelector('sarcasm-root')?.shadowRoot?.querySelectorAll('button') || [])]
+        .some((button) => button.textContent?.trim() === '导出'),
+    { timeout: 10_000 },
+  );
+  await page.evaluate(() => {
+    const root = document.querySelector('sarcasm-root')?.shadowRoot;
+    const exportButton = [...(root?.querySelectorAll('button') || [])].find(
+      (button) => button.textContent?.trim() === '导出',
+    );
+    if (exportButton instanceof HTMLElement) exportButton.click();
+  });
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('sarcasm-root')?.shadowRoot;
+      const output = root?.querySelector('textarea[aria-label="导出的锚点规则 JSON"]');
+      return output instanceof HTMLTextAreaElement && output.value.includes('"bilibili"');
+    },
+    { timeout: 10_000 },
+  );
   await page.close();
   return { skipped: false, injected };
 }

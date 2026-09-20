@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { bilibili, douyin, resolvePageContext } from '../src/lib/platforms';
+import { resolvePageContextSync } from '../src/lib/anchors/resolve';
+import {
+  BUILTIN_PACKS,
+  extractVideoId,
+  parseRulesDocument,
+  validatePack,
+} from '../src/lib/anchors/packs';
 import { parseSarcasmBody } from '../src/lib/nostr/fetch';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
@@ -126,37 +132,54 @@ describe('nostr pull parse', () => {
   });
 });
 
-describe('platform adapters', () => {
-  const emptyDoc = {
-    title: 'demo',
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    documentElement: { innerHTML: '' },
-  } as unknown as Document;
-
-  test('bilibili extracts BV id', () => {
-    const url = new URL('https://www.bilibili.com/video/BV1GJ411x7h7/?spm=1');
-    expect(bilibili.match(url)).toBe(true);
-    expect(bilibili.resolve(url, emptyDoc)?.videoId).toBe('BV1GJ411x7h7');
+describe('anchor rules', () => {
+  test('built-in fixtures stay valid', () => {
+    for (const pack of BUILTIN_PACKS) {
+      expect(validatePack(pack).id).toBe(pack.id);
+    }
   });
 
-  test('douyin extracts path and modal_id', () => {
-    const pathUrl = new URL('https://www.douyin.com/video/7123456789012345678');
-    expect(douyin.resolve(pathUrl, emptyDoc)?.videoId).toBe('7123456789012345678');
-    const modalUrl = new URL(
-      'https://www.douyin.com/jingxuan?modal_id=7654524171870899499',
-    );
-    expect(douyin.resolve(modalUrl, emptyDoc)?.videoId).toBe('7654524171870899499');
-    expect(douyin.kind).toBe('video');
-    expect(douyin.name).toBe('抖音·视频');
-  });
-
-  test('resolvePageContext picks matching adapter', () => {
-    const ctx = resolvePageContext(
-      emptyDoc,
+  test('resolvePageContext picks matching rule', () => {
+    const ctx = resolvePageContextSync(
+      BUILTIN_PACKS,
       'https://www.bilibili.com/video/BV1GJ411x7h7/',
     );
     expect(ctx?.platform).toBe('bilibili');
     expect(ctx?.videoId).toBe('BV1GJ411x7h7');
+  });
+
+  test('accepts an imported URL-only rule', () => {
+    const pack = validatePack({
+      id: 'example',
+      name: 'Example',
+      hosts: ['example.com'],
+      videoIdRules: [{ from: 'query', queryKey: 'video', pattern: '^(\\d+)$' }],
+    });
+    const ctx = resolvePageContextSync(
+      [pack],
+      'https://watch.example.com/play?video=42',
+    );
+    expect(ctx?.platform).toBe('example');
+    expect(ctx?.videoId).toBe('42');
+  });
+
+  test('maps changed platform IDs to a stable anchor', () => {
+    const pack = validatePack({
+      id: 'example',
+      name: 'Example',
+      hosts: ['example.com'],
+      videoIdRules: [{ from: 'query', queryKey: 'video', pattern: '^(\\d+)$' }],
+      aliases: { '9001': '42' },
+      tests: [{ url: 'https://example.com/watch?video=9001', expectedId: '42' }],
+    });
+    expect(
+      extractVideoId(pack, new URL('https://example.com/watch?video=9001')),
+    ).toBe('42');
+  });
+
+  test('rejects unsupported rule document versions', () => {
+    expect(() => parseRulesDocument({ schemaVersion: 2, packs: [] })).toThrow(
+      '不支持规则格式 v2',
+    );
   });
 });

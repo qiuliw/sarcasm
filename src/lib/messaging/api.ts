@@ -2,15 +2,13 @@ import type {
   CommentRecord,
   CreateCommentInput,
   ListCommentsQuery,
-  PageContext,
-  ReplyTarget,
   VoteCommentInput,
   VoteKind,
 } from '../db/types';
 import type { NostrIdentity, NostrSettings } from '../nostr/settings';
 import type { RelayProbeResult } from '../nostr/probe';
-import type { BackendId } from '../backends/dispatch';
 import type { OutboxTrashItem } from '../backends/outbox';
+import type { AnchorPack } from '../anchors/packs';
 
 export type BgRequest =
   | { type: 'ping' }
@@ -34,18 +32,16 @@ export type BgRequest =
   | { type: 'nostr_import_key'; nsec: string }
   | { type: 'nostr_export_key' }
   | { type: 'nostr_clear_key' }
-  | { type: 'backends_get' }
-  | { type: 'backends_set'; ids: BackendId[] }
+  | { type: 'anchors_list' }
+  | { type: 'anchors_export' }
+  | { type: 'anchors_import'; json: string }
+  | { type: 'anchors_clear_custom' }
   | { type: 'clear_comments_cache' }
   | { type: 'reset_all_config' };
 
 export type BgResponse =
   | { ok: true; data?: unknown }
   | { ok: false; error: string };
-
-export type ContentEvent =
-  | { type: 'page_context'; context: PageContext | null }
-  | { type: 'set_reply_target'; target: ReplyTarget | null };
 
 export async function sendBg<T = unknown>(request: BgRequest): Promise<T> {
   const res = (await browser.runtime.sendMessage(request)) as BgResponse;
@@ -138,12 +134,23 @@ export function clearNostrKeyApi(): Promise<NostrSettings> {
   return sendBg({ type: 'nostr_clear_key' });
 }
 
-export function getEnabledBackends(): Promise<BackendId[]> {
-  return sendBg({ type: 'backends_get' });
+export function listAnchorPacks(): Promise<{
+  all: AnchorPack[];
+  custom: AnchorPack[];
+}> {
+  return sendBg({ type: 'anchors_list' });
 }
 
-export function setEnabledBackends(ids: BackendId[]): Promise<BackendId[]> {
-  return sendBg({ type: 'backends_set', ids });
+export function exportAnchorPacks(): Promise<string> {
+  return sendBg({ type: 'anchors_export' });
+}
+
+export function importAnchorPacks(json: string): Promise<AnchorPack[]> {
+  return sendBg({ type: 'anchors_import', json });
+}
+
+export function clearCustomAnchorPacks(): Promise<AnchorPack[]> {
+  return sendBg({ type: 'anchors_clear_custom' });
 }
 
 export function resetAllConfigApi(): Promise<void> {

@@ -4,11 +4,15 @@
     clearCommentsCacheApi,
     clearNostrKeyApi,
     clearOutboxTrashApi,
+    clearCustomAnchorPacks,
+    exportAnchorPacks,
     exportNostrKeyApi,
     generateNostrKeyApi,
     getNostrSettings,
     getStats,
     importNostrKeyApi,
+    importAnchorPacks,
+    listAnchorPacks,
     listOutboxTrash,
     probeNostrRelaysApi,
     resetAllConfigApi,
@@ -22,7 +26,7 @@
     identityFromSettings,
     type NostrSettings,
   } from '../lib/nostr/settings';
-  import { adapterLabel, listPlatformAdapters } from '../lib/platforms';
+  import type { AnchorPack } from '../lib/anchors/packs';
   import type { OutboxTrashItem } from '../lib/backends/outbox';
   import {
     clampPanelMaxVh,
@@ -58,7 +62,11 @@
   let showExport = $state(false);
   let showImport = $state(false);
   let showSync = $state(false);
-  let showPlatforms = $state(false);
+  let showAnchors = $state(false);
+  let rulesPanel = $state<'export' | 'import' | null>(null);
+  let packs = $state<AnchorPack[]>([]);
+  let customPackCount = $state(0);
+  let packJson = $state('');
   let showTrash = $state(false);
   let trashItems = $state<OutboxTrashItem[]>([]);
   let confirmReset = $state(false);
@@ -76,7 +84,6 @@
   let displayNameDraft = $state('');
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
-  const platforms = listPlatformAdapters();
   const relayList = $derived(
     [...new Set(relayDrafts.map((relay) => relay.url.trim()).filter(Boolean))],
   );
@@ -97,6 +104,9 @@
       id: crypto.randomUUID(),
       url,
     }));
+    const anchorPacks = await listAnchorPacks();
+    packs = anchorPacks.all;
+    customPackCount = anchorPacks.custom.length;
     nsecInput = '';
     try {
       const stats = await getStats();
@@ -194,6 +204,32 @@
     } catch {
       error = '复制失败，请手动选中复制';
     }
+  }
+
+  async function exportRules() {
+    busy = true;
+    error = '';
+    status = '';
+    try {
+      packJson = await exportAnchorPacks();
+      showAnchors = true;
+      rulesPanel = 'export';
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function toggleRulesImport() {
+    showAnchors = true;
+    if (rulesPanel === 'import') {
+      rulesPanel = null;
+      packJson = '';
+      return;
+    }
+    rulesPanel = 'import';
+    packJson = '';
   }
 
   async function openTrash(e: MouseEvent) {
@@ -631,24 +667,93 @@
     <button
       type="button"
       class="card-toggle"
-      onclick={() => (showPlatforms = !showPlatforms)}
-      aria-expanded={showPlatforms}
+      onclick={() => (showAnchors = !showAnchors)}
+      aria-expanded={showAnchors}
     >
-      <h2>支持的平台</h2>
+      <h2>锚点规则</h2>
       <span class="toggle-meta">
-        <span class="pending muted-count">{platforms.length}</span>
-        <span class="chevron" class:open={showPlatforms}>›</span>
+        <span class="pending muted-count">{packs.length}</span>
+        <span class="chevron" class:open={showAnchors}>›</span>
       </span>
     </button>
 
-    {#if showPlatforms}
+    {#if showAnchors}
       <ul class="pack-list">
-        {#each platforms as p (p.id)}
+        {#each packs as pack (pack.id)}
           <li>
-            <strong>{adapterLabel(p)}</strong>
+            <strong>{pack.name}</strong>
+            <code>{pack.id}</code>
           </li>
         {/each}
       </ul>
+      <div class="actions">
+        <button
+          type="button"
+          class="ghost"
+          class:active={rulesPanel === 'export'}
+          disabled={busy}
+          onclick={() => void exportRules()}
+        >
+          导出
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          class:active={rulesPanel === 'import'}
+          disabled={busy}
+          onclick={toggleRulesImport}
+        >
+          导入
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy || customPackCount === 0}
+          onclick={() =>
+            void run(async () => {
+              rulesPanel = null;
+              packJson = '';
+              await clearCustomAnchorPacks();
+            }, '已重置')}
+        >
+          重置
+        </button>
+      </div>
+      {#if rulesPanel === 'export'}
+        <textarea
+          rows={compact ? 5 : 7}
+          readonly
+          value={packJson}
+          aria-label="导出的锚点规则 JSON"
+        ></textarea>
+        <button
+          type="button"
+          class="ghost"
+          disabled={busy || !packJson.trim()}
+          onclick={() => void copyText(packJson, '已复制到剪贴板')}
+        >
+          复制
+        </button>
+      {:else if rulesPanel === 'import'}
+        <textarea
+          rows={compact ? 5 : 7}
+          bind:value={packJson}
+          placeholder="粘贴锚点规则 JSON"
+          aria-label="导入锚点规则 JSON"
+        ></textarea>
+        <button
+          type="button"
+          disabled={busy || !packJson.trim()}
+          onclick={() =>
+            void run(async () => {
+              await importAnchorPacks(packJson);
+              packJson = '';
+              rulesPanel = null;
+            }, '已导入')}
+        >
+          确认导入
+        </button>
+      {/if}
     {/if}
   </section>
 
@@ -703,7 +808,7 @@
   <section class="card danger-card">
     <h2>重置</h2>
     {#if !confirmReset}
-      <p class="hint">清除身份、同步、面板偏好与草稿，不删除本机评论。</p>
+      <p class="hint">清除身份、同步、锚点规则、面板偏好与草稿，不删除本机评论。</p>
       <button
         type="button"
         class="ghost danger"
@@ -718,7 +823,7 @@
         重置所有配置
       </button>
     {:else}
-      <p class="hint warn">将清除密钥与同步配置，此操作不可撤销。</p>
+      <p class="hint warn">将清除密钥、同步配置与自定义锚点规则，此操作不可撤销。</p>
       <div class="actions">
         <button
           type="button"
@@ -730,10 +835,12 @@
               confirmReset = false;
               showImport = false;
               showSync = false;
-              showPlatforms = false;
+              showAnchors = false;
               showExport = false;
               exportedNsec = '';
               nsecInput = '';
+              rulesPanel = null;
+              packJson = '';
             }, '配置已重置')}
         >
           确认重置
@@ -976,7 +1083,8 @@
   }
 
   input[type='text'],
-  input[type='password'] {
+  input[type='password'],
+  textarea {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid var(--sc-line, #e3e5e7);
@@ -986,6 +1094,13 @@
     font-size: 13px;
     color: var(--sc-ink, #18191c);
     background: #fff;
+  }
+
+  textarea {
+    min-height: 92px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    line-height: 1.45;
   }
 
   .nostr-heading {
@@ -1275,6 +1390,11 @@
     flex-wrap: wrap;
     font-size: 12px;
     color: var(--sc-muted, #61666d);
+  }
+
+  .pack-list code {
+    color: var(--sc-faint, #9499a0);
+    font-size: 11px;
   }
 
   button {
