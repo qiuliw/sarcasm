@@ -26,6 +26,7 @@ import {
   importNostrKey,
   loadNostrIdentity,
   loadNostrSettings,
+  saveDisplayName,
   saveNostrSettings,
 } from '../lib/nostr/settings';
 
@@ -86,6 +87,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       return { ok: true, data: await loadNostrSettings() };
     case 'nostr_save_settings':
       return { ok: true, data: await saveNostrSettings(message.settings) };
+    case 'nostr_save_display_name':
+      return { ok: true, data: await saveDisplayName(message.displayName) };
     case 'nostr_generate_key':
       return { ok: true, data: await generateNostrKey() };
     case 'nostr_import_key':

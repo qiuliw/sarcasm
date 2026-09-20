@@ -47,7 +47,7 @@
     {#if !ready}
       <strong class="muted">…</strong>
     {:else if identity?.configured}
-      <strong class="npub">{identity.displayName || '已配置'}</strong>
+      <strong class="npub">{identity.configured ? '已配置' : '未配置'}</strong>
     {:else}
       <strong class="warn">未配置</strong>
     {/if}

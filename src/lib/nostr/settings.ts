@@ -97,6 +97,15 @@ export async function clearNostrKey(): Promise<NostrSettings> {
   return saveNostrSettings({ ...current, nsec: null });
 }
 
+/** 只改显示名，不动密钥与同步配置 */
+export async function saveDisplayName(name: string): Promise<NostrSettings> {
+  const current = await loadNostrSettings();
+  return saveNostrSettings({
+    ...current,
+    displayName: name.trim().slice(0, 32),
+  });
+}
+
 export async function exportNostrKey(): Promise<string> {
   const settings = await loadNostrSettings();
   if (!settings.nsec) throw new Error('尚未配置密钥');

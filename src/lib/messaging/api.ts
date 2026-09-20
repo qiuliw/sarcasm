@@ -22,6 +22,7 @@ export type BgRequest =
   | { type: 'nostr_identity' }
   | { type: 'nostr_get_settings' }
   | { type: 'nostr_save_settings'; settings: NostrSettings }
+  | { type: 'nostr_save_display_name'; displayName: string }
   | { type: 'nostr_generate_key' }
   | { type: 'nostr_import_key'; nsec: string }
   | { type: 'nostr_export_key' }
@@ -84,6 +85,10 @@ export function getNostrSettings(): Promise<NostrSettings> {
 
 export function saveNostrSettingsApi(settings: NostrSettings): Promise<NostrSettings> {
   return sendBg({ type: 'nostr_save_settings', settings });
+}
+
+export function saveDisplayNameApi(displayName: string): Promise<NostrSettings> {
+  return sendBg({ type: 'nostr_save_display_name', displayName });
 }
 
 export function generateNostrKeyApi(): Promise<NostrSettings> {

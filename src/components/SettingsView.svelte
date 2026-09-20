@@ -11,6 +11,7 @@
     importAnchorPacks,
     importNostrKeyApi,
     listAnchorPacks,
+    saveDisplayNameApi,
     saveNostrSettingsApi,
     setEnabledBackends,
   } from '../lib/messaging/api';
@@ -46,14 +47,12 @@
 
   const identity = $derived(settings ? identityFromSettings(settings) : null);
   const backends = availableBackends();
-  const identityLabel = $derived(
-    identity?.configured
-      ? identity.displayName || '已配置'
-      : '未配置',
-  );
+  const keyStatus = $derived(identity?.configured ? '已配置' : '未配置');
+  let displayNameDraft = $state('');
 
   async function refresh() {
     settings = await getNostrSettings();
+    displayNameDraft = settings.displayName;
     relayText = settings.relays.join('\n');
     nsecInput = '';
     enabledBackends = await getEnabledBackends();
@@ -168,19 +167,15 @@
         type="text"
         maxlength="32"
         placeholder="可选"
-        value={settings?.displayName ?? ''}
-        oninput={(e) => {
-          if (settings) settings.displayName = e.currentTarget.value;
-        }}
+        bind:value={displayNameDraft}
       />
       <button
         type="button"
         class="save-sm"
-        disabled={busy || !settings}
+        disabled={busy}
         onclick={() =>
           void run(async () => {
-            if (!settings) return;
-            await saveNostrSettingsApi(settings);
+            await saveDisplayNameApi(displayNameDraft);
           }, '显示名已保存')}
       >
         保存
@@ -190,7 +185,7 @@
 
   <section class="card">
     <h2>密钥</h2>
-    <p class="mono" class:muted={!identity?.configured}>{identityLabel}</p>
+    <p class="mono" class:muted={!identity?.configured}>{keyStatus}</p>
 
     <div class="actions">
       <button
