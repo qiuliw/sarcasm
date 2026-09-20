@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CommentTreeNode, VoteKind } from '../lib/db/types';
-  import { pubkeyToNpub, shortNpub } from '../lib/nostr/keys';
+  import { displayNameHint, pubkeyToNpub, shortNpub } from '../lib/nostr/keys';
   import CommentItem from './CommentItem.svelte';
 
   interface Props {
@@ -29,6 +29,7 @@
 
   let confirmDelete = $state(false);
   let showPubkey = $state(false);
+  let showMentionPubkey = $state(false);
 
   const COLLAPSE_AT = 3;
 
@@ -64,15 +65,28 @@
     return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   }
 
-  const initial = $derived((node.author || '?').slice(0, 1).toUpperCase());
   const highlighted = $derived(highlightId === node.id);
+  const authorName = $derived(displayNameHint(node.author, node.authorPubkey));
+  const authorNpub = $derived(node.authorPubkey ? shortNpub(node.authorPubkey) : null);
+  const legacyAuthor = $derived(node.author === '我' ? '未知用户' : node.author);
   const authorLabel = $derived(
-    showPubkey && node.authorPubkey ? shortNpub(node.authorPubkey) : node.author,
+    showPubkey || !authorName ? authorNpub || legacyAuthor : authorName,
   );
+  const canToggleAuthor = $derived(!!node.authorPubkey && !!authorName);
+  const initial = $derived((authorLabel || '?').slice(0, 1).toUpperCase());
   const authorTitle = $derived(
     node.authorPubkey
-      ? `${showPubkey ? '点击显示昵称' : '点击显示公钥缩写'}\n${pubkeyToNpub(node.authorPubkey)}`
+      ? `${canToggleAuthor ? (showPubkey ? '点击显示昵称\n' : '点击显示公钥缩写\n') : ''}${pubkeyToNpub(node.authorPubkey)}`
       : '此评论没有可用的 Nostr 公钥',
+  );
+  const mentionName = $derived(displayNameHint(node.replyToAuthor, node.replyToPubkey));
+  const mentionNpub = $derived(
+    node.replyToPubkey ? shortNpub(node.replyToPubkey) : null,
+  );
+  const mentionLabel = $derived(
+    showMentionPubkey || !mentionName
+      ? mentionNpub || (node.replyToAuthor === '我' ? null : node.replyToAuthor)
+      : mentionName,
   );
 
   function requestDelete() {
@@ -107,12 +121,12 @@
         <button
           type="button"
           class="author"
-          class:has-key={!!node.authorPubkey}
-          disabled={!node.authorPubkey}
+          class:has-key={canToggleAuthor}
+          disabled={!canToggleAuthor}
           title={authorTitle}
-          aria-label={node.authorPubkey ? `${authorLabel}，点击切换昵称和公钥` : node.author}
+          aria-label={canToggleAuthor ? `${authorLabel}，点击切换昵称和公钥` : authorLabel}
           onclick={() => {
-            if (node.authorPubkey) showPubkey = !showPubkey;
+            if (canToggleAuthor) showPubkey = !showPubkey;
           }}
         >
           {authorLabel}
@@ -120,8 +134,23 @@
         <time datetime={new Date(node.createdAt).toISOString()}>{formatRelativeTime(node.createdAt)}</time>
       </header>
       <p class="body">
-        {#if node.replyToAuthor}
-          <span class="mention">@{node.replyToAuthor}</span>
+        {#if mentionLabel}
+          {#if node.replyToPubkey}
+            <button
+              type="button"
+              class="mention"
+              class:has-key={!!mentionName}
+              disabled={!mentionName}
+              title={pubkeyToNpub(node.replyToPubkey)}
+              onclick={() => {
+                if (mentionName) showMentionPubkey = !showMentionPubkey;
+              }}
+            >
+              @{mentionLabel}
+            </button>
+          {:else}
+            <span class="mention">@{mentionLabel}</span>
+          {/if}
         {/if}
         {node.body}
       </p>
@@ -305,10 +334,23 @@
     color: var(--sc-fg);
   }
 
-  .mention {
+  .body .mention {
+    border: 0;
+    background: transparent;
+    padding: 0;
     color: var(--sc-accent);
+    font: inherit;
     font-weight: 500;
     margin-right: 4px;
+  }
+
+  .body button.mention.has-key {
+    cursor: pointer;
+  }
+
+  .body button.mention.has-key:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   footer {

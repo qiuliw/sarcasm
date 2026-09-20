@@ -3,10 +3,10 @@ import { SimplePool } from 'nostr-tools/pool';
 import { shortNpub } from './keys';
 import { loadNostrSettings } from './settings';
 import { absorbRemoteComment } from '../db/sqlite';
-import type { CommentRecord, Platform } from '../db/types';
+import type { AnchorRuleId, CommentRecord } from '../db/types';
 
 export interface PullCommentsInput {
-  platform: Platform;
+  platform: AnchorRuleId;
   videoId: string;
 }
 
@@ -33,6 +33,22 @@ function replyParentId(event: Event): string | null {
   return (marked?.[1] || replies[replies.length - 1]?.[1]) ?? null;
 }
 
+function replyIdentity(event: Event): {
+  pubkey: string | null;
+  displayName: string | null;
+} {
+  const replyTag = event.tags.find(
+    (item) => item[0] === 'rp' && /^[0-9a-f]{64}$/i.test(item[1] ?? ''),
+  );
+  const tag = replyTag ?? event.tags.find(
+    (item) => item[0] === 'p' && /^[0-9a-f]{64}$/i.test(item[1] ?? ''),
+  );
+  return {
+    pubkey: tag?.[1]?.toLowerCase() ?? null,
+    displayName: (replyTag?.[2] ?? tag?.[3])?.trim() || null,
+  };
+}
+
 function isSarcasmEvent(event: Event, platform: string, videoId: string): boolean {
   const i = tagValue(event, 'i');
   const expected = `${platform}:${videoId}`;
@@ -44,7 +60,7 @@ function isSarcasmEvent(event: Event, platform: string, videoId: string): boolea
 
 function eventToComment(
   event: Event,
-  platform: Platform,
+  platform: AnchorRuleId,
   videoId: string,
 ): CommentRecord | null {
   if (!isSarcasmEvent(event, platform, videoId)) return null;
@@ -53,6 +69,7 @@ function eventToComment(
 
   const author =
     tagValue(event, 'n')?.trim() || shortNpub(event.pubkey);
+  const reply = replyIdentity(event);
 
   const createdAt = event.created_at * 1000;
   return {
@@ -61,7 +78,8 @@ function eventToComment(
     videoId,
     parentId: replyParentId(event),
     nativeParentId: null,
-    replyToAuthor: null,
+    replyToAuthor: reply.displayName,
+    replyToPubkey: reply.pubkey,
     author,
     authorPubkey: event.pubkey,
     body,
@@ -93,10 +111,30 @@ export async function pullCommentsFromNostr(
     const events = await pool.querySync(settings.relays, filter, {
       maxWait: 5_000,
     });
+    const rows = events
+      .map((event) => ({
+        event,
+        row: eventToComment(event, input.platform, input.videoId),
+      }))
+      .filter(
+        (item): item is { event: Event; row: CommentRecord } => item.row !== null,
+      );
+    const namesByPubkey = new Map<string, string>();
+    for (const { row } of rows) {
+      if (
+        row.authorPubkey &&
+        row.author &&
+        row.author !== shortNpub(row.authorPubkey)
+      ) {
+        namesByPubkey.set(row.authorPubkey.toLowerCase(), row.author);
+      }
+    }
+
     let imported = 0;
-    for (const event of events) {
-      const row = eventToComment(event, input.platform, input.videoId);
-      if (!row) continue;
+    for (const { event, row } of rows) {
+      if (!row.replyToAuthor && row.replyToPubkey) {
+        row.replyToAuthor = namesByPubkey.get(row.replyToPubkey) ?? null;
+      }
       const localHint = tagValue(event, 'c') ?? null;
       const result = await absorbRemoteComment(row, localHint);
       if (result === 'inserted' || result === 'merged') imported += 1;

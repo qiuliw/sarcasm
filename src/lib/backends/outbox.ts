@@ -85,6 +85,8 @@ export async function enqueueOutbound(
     videoId: event.videoId,
     body: event.body,
     parentId: event.parentId ?? null,
+    replyToPubkey: event.replyToPubkey ?? null,
+    replyToAuthor: event.replyToAuthor ?? null,
     pageUrl: event.pageUrl,
     attempts: 0,
     nextAt: Date.now(),
@@ -124,6 +126,8 @@ export async function retryOutboxTrash(ids?: string[]): Promise<number> {
       videoId: item.videoId,
       body: item.body,
       parentId: item.parentId,
+      replyToPubkey: item.replyToPubkey,
+      replyToAuthor: item.replyToAuthor,
       pageUrl: item.pageUrl,
     });
   }

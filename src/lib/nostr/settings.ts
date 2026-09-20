@@ -4,6 +4,7 @@ import {
   pubkeyToNpub,
   secretToNsec,
   secretToPubkey,
+  shortNpub,
   tryParseNsec,
 } from './keys';
 
@@ -34,7 +35,7 @@ export interface NostrIdentity {
   configured: boolean;
   npub: string | null;
   pubkey: string | null;
-  /** 发评作者：显示名，缺省为「我」 */
+  /** 发评作者：显示名，缺省为 npub 缩写 */
   shortLabel: string;
   displayName: string;
   relays: string[];
@@ -166,7 +167,7 @@ export function identityFromSettings(settings: NostrSettings): NostrIdentity {
       configured: true,
       npub,
       pubkey,
-      shortLabel: displayName || '我',
+      shortLabel: displayName || shortNpub(pubkey),
       displayName,
       relays: settings.relays,
     };

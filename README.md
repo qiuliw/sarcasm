@@ -55,7 +55,7 @@ bun run test    # 单元测试 + Chrome 冒烟
 ```sql
 comments(
   id, platform, video_id,
-  parent_id, native_parent_id, reply_to_author,
+  parent_id, native_parent_id, reply_to_author, reply_to_pubkey,
   author, author_pubkey, body,
   likes, dislikes, my_vote,
   created_at, updated_at

@@ -29,6 +29,16 @@ export function shortNpub(npubOrPubkey: string): string {
   return `${npub.slice(0, 8)}…${npub.slice(-4)}`;
 }
 
+export function displayNameHint(
+  name: string | null | undefined,
+  pubkey?: string | null,
+): string | null {
+  const value = name?.trim();
+  if (!value || value === '我' || value.startsWith('npub1')) return null;
+  if (pubkey && value === shortNpub(pubkey)) return null;
+  return value;
+}
+
 export function tryParseNsec(input: string): string | null {
   try {
     const nsec = input.trim();

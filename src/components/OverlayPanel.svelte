@@ -280,10 +280,10 @@
       platform: context.platform,
       videoId: context.videoId,
       body,
-      author: identity.shortLabel,
       parentId:
         target.kind === 'overlay_comment' ? target.threadRootId ?? target.targetId ?? null : null,
       replyToAuthor: target.kind === 'overlay_comment' ? target.replyToAuthor ?? null : null,
+      replyToPubkey: target.kind === 'overlay_comment' ? target.replyToPubkey ?? null : null,
       pageUrl: context.url,
     });
 
@@ -315,6 +315,7 @@
       targetId: node.id,
       threadRootId: resolved.threadRootId,
       replyToAuthor: resolved.replyToAuthor ?? undefined,
+      replyToPubkey: resolved.replyToPubkey ?? undefined,
       preview: node.body.slice(0, 80),
     };
   }

@@ -86,7 +86,7 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       }
       const record = await createComment({
         ...message.input,
-        author: message.input.author || identity.shortLabel,
+        author: identity.shortLabel,
         authorPubkey: identity.pubkey,
       });
 
@@ -96,6 +96,8 @@ async function handle(message: BgRequest): Promise<BgResponse> {
         videoId: record.videoId,
         body: record.body,
         parentId: record.parentId,
+        replyToPubkey: record.replyToPubkey,
+        replyToAuthor: record.replyToAuthor,
         pageUrl: message.input.pageUrl,
       };
 

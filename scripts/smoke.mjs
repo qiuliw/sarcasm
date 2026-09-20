@@ -88,29 +88,31 @@ async function runCrud(page) {
   const created = await send(page, {
     type: 'create_comment',
     input: {
-      platform: 'bilibili',
+      platform: 'bilibili-video',
       videoId: 'BV_SMOKE_TEST',
       body: 'smoke hello',
-      author: 'tester',
     },
   });
   assert(created?.ok, `create failed: ${JSON.stringify(created)}`);
   assert(created.data?.id, 'create 未返回 id');
   assert(created.data?.authorPubkey === identity.data.pubkey, '本地评论未关联作者公钥');
+  assert(created.data?.author.startsWith('npub1'), '无昵称作者应显示 npub 缩写');
   assert(created.data?.nativeParentId == null, '新评论不应写入原生锚点');
 
   const reply = await send(page, {
     type: 'create_comment',
     input: {
-      platform: 'bilibili',
+      platform: 'bilibili-video',
       videoId: 'BV_SMOKE_TEST',
       body: 'smoke reply',
       parentId: created.data.id,
       replyToAuthor: 'tester',
+      replyToPubkey: identity.data.pubkey,
     },
   });
   assert(reply?.ok, `reply failed: ${JSON.stringify(reply)}`);
   assert(reply.data?.replyToAuthor === 'tester', '二级回复未写入 @用户名');
+  assert(reply.data?.replyToPubkey === identity.data.pubkey, '二级回复未写入 @公钥');
   assert(reply.data?.parentId === created.data.id, '二级应挂在一级下');
 
   const liked = await send(page, {
@@ -132,7 +134,7 @@ async function runCrud(page) {
 
   const listed = await send(page, {
     type: 'list_comments',
-    query: { platform: 'bilibili', videoId: 'BV_SMOKE_TEST' },
+    query: { platform: 'bilibili-video', videoId: 'BV_SMOKE_TEST' },
   });
   assert(listed?.ok, `list failed: ${JSON.stringify(listed)}`);
   const rows = listed.data;
@@ -146,7 +148,7 @@ async function runCrud(page) {
 
   const listed2 = await send(page, {
     type: 'list_comments',
-    query: { platform: 'bilibili', videoId: 'BV_SMOKE_TEST' },
+    query: { platform: 'bilibili-video', videoId: 'BV_SMOKE_TEST' },
   });
   assert(listed2?.ok, `list2 failed: ${JSON.stringify(listed2)}`);
   assert(

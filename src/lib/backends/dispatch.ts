@@ -7,6 +7,8 @@ export interface OutboundComment {
   videoId: string;
   body: string;
   parentId?: string | null;
+  replyToPubkey?: string | null;
+  replyToAuthor?: string | null;
   pageUrl?: string;
   commentId?: string;
 }
@@ -25,6 +27,8 @@ export async function publishOutbound(event: OutboundComment): Promise<BackendRe
     videoId: event.videoId,
     body: event.body,
     parentCommentId: event.parentId,
+    replyToPubkey: event.replyToPubkey,
+    replyToAuthor: event.replyToAuthor,
     pageUrl: event.pageUrl,
     localCommentId: event.commentId,
   });

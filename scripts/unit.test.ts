@@ -7,21 +7,29 @@ import {
   validatePack,
 } from '../src/lib/anchors/packs';
 import { parseSarcasmBody } from '../src/lib/nostr/fetch';
+import { buildCommentTemplate } from '../src/lib/nostr/publish';
 import { buildCommentForest, resolveOverlayReply } from '../src/lib/db/tree';
 import type { CommentRecord } from '../src/lib/db/types';
 import { applyVote } from '../src/lib/db/vote';
-import { createSecretKey, pubkeyToNpub, secretToPubkey, shortNpub } from '../src/lib/nostr/keys';
-import { DEFAULT_RELAYS } from '../src/lib/nostr/settings';
+import {
+  createSecretKey,
+  pubkeyToNpub,
+  secretToNsec,
+  secretToPubkey,
+  shortNpub,
+} from '../src/lib/nostr/keys';
+import { DEFAULT_RELAYS, identityFromSettings } from '../src/lib/nostr/settings';
 import { probeRelay } from '../src/lib/nostr/probe';
 import { isMeaningfulDraft, videoDraftKey } from '../src/lib/prefs/draft';
 
 function comment(partial: Partial<CommentRecord> & Pick<CommentRecord, 'id' | 'body'>): CommentRecord {
   return {
-    platform: 'bilibili',
+    platform: 'bilibili-video',
     videoId: 'BV1',
     parentId: null,
     nativeParentId: null,
     replyToAuthor: null,
+    replyToPubkey: null,
     author: 'me',
     authorPubkey: null,
     likes: 0,
@@ -49,11 +57,17 @@ describe('buildCommentForest', () => {
 });
 
 describe('resolveOverlayReply', () => {
-  test('reply to root stays under root without @', () => {
-    const root = comment({ id: 'v1', body: 'hi', author: 'Alice' });
+  test('reply to root keeps target identity', () => {
+    const root = comment({
+      id: 'v1',
+      body: 'hi',
+      author: 'Alice',
+      authorPubkey: 'a'.repeat(64),
+    });
     expect(resolveOverlayReply(root)).toEqual({
       threadRootId: 'v1',
-      replyToAuthor: null,
+      replyToAuthor: 'Alice',
+      replyToPubkey: 'a'.repeat(64),
     });
   });
 
@@ -63,11 +77,13 @@ describe('resolveOverlayReply', () => {
       body: 'yo',
       parentId: 'v1',
       author: 'Bob',
+      authorPubkey: 'b'.repeat(64),
       replyToAuthor: 'Alice',
     });
     expect(resolveOverlayReply(child)).toEqual({
       threadRootId: 'v1',
       replyToAuthor: 'Bob',
+      replyToPubkey: 'b'.repeat(64),
     });
   });
 });
@@ -94,7 +110,7 @@ describe('applyVote', () => {
 
 describe('composer drafts', () => {
   test('keys by platform and video, and ignores empty drafts', () => {
-    expect(videoDraftKey('bilibili', 'BV1')).toBe('bilibili:BV1');
+    expect(videoDraftKey('bilibili-video', 'BV1')).toBe('bilibili-video:BV1');
     expect(isMeaningfulDraft({ body: '', replyTarget: { kind: 'video' } })).toBe(false);
     expect(isMeaningfulDraft({ body: 'hi', replyTarget: { kind: 'video' } })).toBe(true);
   });
@@ -106,6 +122,18 @@ describe('nostr keys', () => {
     const npub = pubkeyToNpub(secretToPubkey(sk));
     expect(npub.startsWith('npub1')).toBe(true);
     expect(shortNpub(npub).includes('…')).toBe(true);
+  });
+
+  test('falls back to npub when display name is empty', () => {
+    const sk = createSecretKey();
+    const pubkey = secretToPubkey(sk);
+    const base = { nsec: secretToNsec(sk), relays: [] };
+    expect(identityFromSettings({ ...base, displayName: '' }).shortLabel).toBe(
+      shortNpub(pubkey),
+    );
+    expect(identityFromSettings({ ...base, displayName: 'Alice' }).shortLabel).toBe(
+      'Alice',
+    );
   });
 });
 
@@ -129,6 +157,22 @@ describe('nostr pull parse', () => {
   test('strips sarcasm footer from content', () => {
     expect(parseSarcasmBody('你好\n\n#sarcasm douyin:123')).toBe('你好');
     expect(parseSarcasmBody('纯文本')).toBe('纯文本');
+  });
+});
+
+describe('nostr reply identity', () => {
+  test('publishes reply pubkey and display-name hint', () => {
+    const pubkey = 'a'.repeat(64);
+    const template = buildCommentTemplate({
+      platform: 'bilibili-video',
+      videoId: 'BV1',
+      body: 'reply',
+      parentCommentId: 'event-id',
+      replyToPubkey: pubkey,
+      replyToAuthor: 'Alice',
+    });
+    expect(template.tags).toContainEqual(['p', pubkey]);
+    expect(template.tags).toContainEqual(['rp', pubkey, 'Alice']);
   });
 });
 

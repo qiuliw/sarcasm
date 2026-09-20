@@ -1,14 +1,16 @@
-import type { Platform } from '../db/types';
-import { nsecToSecret } from './keys';
+import type { AnchorRuleId } from '../db/types';
+import { displayNameHint, nsecToSecret } from './keys';
 import { loadNostrSettings } from './settings';
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure';
 import { SimplePool } from 'nostr-tools/pool';
 
 export interface PublishCommentInput {
-  platform: Platform;
+  platform: AnchorRuleId;
   videoId: string;
   body: string;
   parentCommentId?: string | null;
+  replyToPubkey?: string | null;
+  replyToAuthor?: string | null;
   pageUrl?: string;
   /** 本机评论 id，写入 tag 便于对端去重 / 本机 remap */
   localCommentId?: string;
@@ -26,6 +28,40 @@ function buildContent(input: PublishCommentInput): string {
   return `${input.body}\n\n#sarcasm ${tag}`;
 }
 
+export function buildCommentTemplate(
+  input: PublishCommentInput,
+  displayName = '',
+): EventTemplate {
+  const template: EventTemplate = {
+    kind: 1,
+    created_at: Math.floor(Date.now() / 1000),
+    content: buildContent(input),
+    tags: [
+      ['client', 'sarcasm'],
+      ['i', `${input.platform}:${input.videoId}`],
+      ['r', input.pageUrl || `${input.platform}:${input.videoId}`],
+    ],
+  };
+  if (input.parentCommentId) {
+    template.tags.push(['e', input.parentCommentId, '', 'reply']);
+  }
+  if (input.replyToPubkey && /^[0-9a-f]{64}$/i.test(input.replyToPubkey)) {
+    const pubkey = input.replyToPubkey.toLowerCase();
+    template.tags.push(['p', pubkey]);
+    const replyTag = ['rp', pubkey];
+    const name = displayNameHint(input.replyToAuthor, pubkey);
+    if (name) replyTag.push(name);
+    template.tags.push(replyTag);
+  }
+  if (input.localCommentId) {
+    template.tags.push(['c', input.localCommentId]);
+  }
+  if (displayName) {
+    template.tags.push(['n', displayName]);
+  }
+  return template;
+}
+
 export async function publishCommentToNostr(
   input: PublishCommentInput,
 ): Promise<PublishResult> {
@@ -39,26 +75,7 @@ export async function publishCommentToNostr(
 
   try {
     const sk = nsecToSecret(settings.nsec);
-    const template: EventTemplate = {
-      kind: 1,
-      created_at: Math.floor(Date.now() / 1000),
-      content: buildContent(input),
-      tags: [
-        ['client', 'sarcasm'],
-        ['i', `${input.platform}:${input.videoId}`],
-        ['r', input.pageUrl || `${input.platform}:${input.videoId}`],
-      ],
-    };
-    if (input.parentCommentId) {
-      template.tags.push(['e', input.parentCommentId, '', 'reply']);
-    }
-    if (input.localCommentId) {
-      template.tags.push(['c', input.localCommentId]);
-    }
-    if (settings.displayName) {
-      template.tags.push(['n', settings.displayName]);
-    }
-
+    const template = buildCommentTemplate(input, settings.displayName);
     const event = finalizeEvent(template, sk);
     const pool = new SimplePool();
     try {

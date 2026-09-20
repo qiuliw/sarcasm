@@ -1,4 +1,4 @@
-import type { Platform, ReplyTarget } from '../db/types';
+import type { AnchorRuleId, ReplyTarget } from '../db/types';
 
 const DRAFTS_KEY = 'sarcasm_composer_drafts_v1';
 const MAX_DRAFTS = 40;
@@ -12,7 +12,7 @@ export interface VideoDraft {
 
 export type DraftMap = Record<string, VideoDraft>;
 
-export function videoDraftKey(platform: Platform, videoId: string): string {
+export function videoDraftKey(platform: AnchorRuleId, videoId: string): string {
   return `${platform}:${videoId}`;
 }
 
@@ -31,6 +31,7 @@ function normalizeReplyTarget(raw: unknown): ReplyTarget {
       targetId: typeof t.targetId === 'string' ? t.targetId : undefined,
       threadRootId: typeof t.threadRootId === 'string' ? t.threadRootId : undefined,
       replyToAuthor: typeof t.replyToAuthor === 'string' ? t.replyToAuthor : undefined,
+      replyToPubkey: typeof t.replyToPubkey === 'string' ? t.replyToPubkey : undefined,
       preview: typeof t.preview === 'string' ? t.preview : undefined,
     };
   }
@@ -61,7 +62,7 @@ export async function loadAllDrafts(): Promise<DraftMap> {
   return out;
 }
 
-export async function loadDraft(platform: Platform, videoId: string): Promise<VideoDraft | null> {
+export async function loadDraft(platform: AnchorRuleId, videoId: string): Promise<VideoDraft | null> {
   const all = await loadAllDrafts();
   return all[videoDraftKey(platform, videoId)] ?? null;
 }
@@ -73,7 +74,7 @@ function prune(map: DraftMap): DraftMap {
 }
 
 export async function saveDraft(
-  platform: Platform,
+  platform: AnchorRuleId,
   videoId: string,
   draft: Omit<VideoDraft, 'updatedAt'>,
 ): Promise<void> {
@@ -89,7 +90,7 @@ export async function saveDraft(
   await browser.storage.local.set({ [DRAFTS_KEY]: prune(all) });
 }
 
-export async function clearDraft(platform: Platform, videoId: string): Promise<void> {
+export async function clearDraft(platform: AnchorRuleId, videoId: string): Promise<void> {
   const key = videoDraftKey(platform, videoId);
   const all = await loadAllDrafts();
   if (!(key in all)) return;

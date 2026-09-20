@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ReplyTarget } from '../lib/db/types';
+  import { displayNameHint, shortNpub } from '../lib/nostr/keys';
 
   interface Props {
     target: ReplyTarget | null;
@@ -25,7 +26,9 @@
 
   function label(t: ReplyTarget | null): string {
     if (!t || t.kind === 'video') return '善语结善缘，恶言伤人心';
-    if (t.replyToAuthor) return `回复 @${t.replyToAuthor}`;
+    const name = displayNameHint(t.replyToAuthor, t.replyToPubkey);
+    if (name) return `回复 @${name}`;
+    if (t.replyToPubkey) return `回复 @${shortNpub(t.replyToPubkey)}`;
     return '回复评论';
   }
 

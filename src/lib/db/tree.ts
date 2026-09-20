@@ -47,15 +47,11 @@ export function buildCommentForest(rows: CommentRecord[]): {
 export function resolveOverlayReply(node: CommentRecord): {
   threadRootId: string;
   replyToAuthor: string | null;
+  replyToPubkey: string | null;
 } {
-  if (node.parentId) {
-    return {
-      threadRootId: node.parentId,
-      replyToAuthor: node.author,
-    };
-  }
   return {
-    threadRootId: node.id,
-    replyToAuthor: null,
+    threadRootId: node.parentId ?? node.id,
+    replyToAuthor: node.author,
+    replyToPubkey: node.authorPubkey,
   };
 }
