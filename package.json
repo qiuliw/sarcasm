@@ -2,7 +2,7 @@
   "name": "sarcasm",
   "description": "B站 / 抖音外挂评论面板：Nostr 同步",
   "private": false,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "license": "MIT",
   "author": "qiuliw",
@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@tsconfig/svelte": "^5.0.8",
+    "@types/bun": "^1.4.2",
     "@types/sql.js": "^1.4.11",
     "@wxt-dev/module-svelte": "^2.0.4",
     "puppeteer-core": "^25.11.0",

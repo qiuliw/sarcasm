@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS comments (
   native_parent_id TEXT,
   reply_to_author TEXT,
   author TEXT NOT NULL,
+  author_pubkey TEXT,
   body TEXT NOT NULL,
   likes INTEGER NOT NULL DEFAULT 0,
   dislikes INTEGER NOT NULL DEFAULT 0,
@@ -78,6 +79,9 @@ function migrate(database: Database) {
   if (!names.has('my_vote')) {
     database.run(`ALTER TABLE comments ADD COLUMN my_vote TEXT`);
   }
+  if (!names.has('author_pubkey')) {
+    database.run(`ALTER TABLE comments ADD COLUMN author_pubkey TEXT`);
+  }
 }
 
 async function open(): Promise<Database> {
@@ -111,6 +115,7 @@ function rowToComment(row: Record<string, unknown>): CommentRecord {
     nativeParentId: row.native_parent_id == null ? null : String(row.native_parent_id),
     replyToAuthor: row.reply_to_author == null ? null : String(row.reply_to_author),
     author: String(row.author),
+    authorPubkey: row.author_pubkey == null ? null : String(row.author_pubkey),
     body: String(row.body),
     likes: Number(row.likes ?? 0),
     dislikes: Number(row.dislikes ?? 0),
@@ -155,6 +160,7 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
     nativeParentId: null,
     replyToAuthor: input.replyToAuthor?.trim() || null,
     author: input.author?.trim() || '我',
+    authorPubkey: input.authorPubkey?.trim() || null,
     body: input.body.trim(),
     likes: 0,
     dislikes: 0,
@@ -169,9 +175,9 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
 
   database.run(
     `INSERT INTO comments
-      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
-       likes, dislikes, my_vote, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author,
+       author_pubkey, body, likes, dislikes, my_vote, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.platform,
@@ -180,6 +186,7 @@ export async function createComment(input: CreateCommentInput): Promise<CommentR
       record.nativeParentId,
       record.replyToAuthor,
       record.author,
+      record.authorPubkey,
       record.body,
       record.likes,
       record.dislikes,
@@ -229,9 +236,9 @@ export async function absorbRemoteComment(
     database.run(`DELETE FROM comments WHERE id = ?`, [localId]);
     database.run(
       `INSERT INTO comments
-        (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
-         likes, dislikes, my_vote, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author,
+         author_pubkey, body, likes, dislikes, my_vote, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         record.id,
         record.platform,
@@ -240,6 +247,7 @@ export async function absorbRemoteComment(
         record.nativeParentId,
         record.replyToAuthor,
         record.author,
+        record.authorPubkey,
         record.body,
         local?.likes ?? 0,
         local?.dislikes ?? 0,
@@ -254,9 +262,9 @@ export async function absorbRemoteComment(
 
   database.run(
     `INSERT INTO comments
-      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author, body,
-       likes, dislikes, my_vote, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, platform, video_id, parent_id, native_parent_id, reply_to_author, author,
+       author_pubkey, body, likes, dislikes, my_vote, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.platform,
@@ -265,6 +273,7 @@ export async function absorbRemoteComment(
       record.nativeParentId,
       record.replyToAuthor,
       record.author,
+      record.authorPubkey,
       record.body,
       record.likes,
       record.dislikes,

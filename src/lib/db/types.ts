@@ -17,6 +17,8 @@ export interface CommentRecord {
   /** 二级回复对象用户名，展示为 @用户名 */
   replyToAuthor: string | null;
   author: string;
+  /** Nostr 事件作者的 32-byte hex 公钥；旧本地评论可能为空 */
+  authorPubkey: string | null;
   body: string;
   likes: number;
   dislikes: number;
@@ -55,6 +57,7 @@ export interface CreateCommentInput {
   videoId: string;
   body: string;
   author?: string;
+  authorPubkey?: string | null;
   parentId?: string | null;
   replyToAuthor?: string | null;
   pageUrl?: string;

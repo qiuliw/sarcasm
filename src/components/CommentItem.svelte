@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CommentTreeNode, VoteKind } from '../lib/db/types';
+  import { pubkeyToNpub, shortNpub } from '../lib/nostr/keys';
   import CommentItem from './CommentItem.svelte';
 
   interface Props {
@@ -27,6 +28,7 @@
   }: Props = $props();
 
   let confirmDelete = $state(false);
+  let showPubkey = $state(false);
 
   const COLLAPSE_AT = 3;
 
@@ -64,6 +66,14 @@
 
   const initial = $derived((node.author || '?').slice(0, 1).toUpperCase());
   const highlighted = $derived(highlightId === node.id);
+  const authorLabel = $derived(
+    showPubkey && node.authorPubkey ? shortNpub(node.authorPubkey) : node.author,
+  );
+  const authorTitle = $derived(
+    node.authorPubkey
+      ? `${showPubkey ? '点击显示昵称' : '点击显示公钥缩写'}\n${pubkeyToNpub(node.authorPubkey)}`
+      : '此评论没有可用的 Nostr 公钥',
+  );
 
   function requestDelete() {
     if (!confirmDelete) {
@@ -94,7 +104,19 @@
     <div class="avatar" aria-hidden="true">{initial}</div>
     <div class="main">
       <header>
-        <strong>{node.author}</strong>
+        <button
+          type="button"
+          class="author"
+          class:has-key={!!node.authorPubkey}
+          disabled={!node.authorPubkey}
+          title={authorTitle}
+          aria-label={node.authorPubkey ? `${authorLabel}，点击切换昵称和公钥` : node.author}
+          onclick={() => {
+            if (node.authorPubkey) showPubkey = !showPubkey;
+          }}
+        >
+          {authorLabel}
+        </button>
         <time datetime={new Date(node.createdAt).toISOString()}>{formatRelativeTime(node.createdAt)}</time>
       </header>
       <p class="body">
@@ -243,10 +265,29 @@
     gap: 8px;
   }
 
-  strong {
+  header .author {
+    border: 0;
+    background: transparent;
+    padding: 0;
     color: var(--sc-muted);
     font-size: 13px;
     font-weight: 500;
+    cursor: default;
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  header .author.has-key {
+    cursor: pointer;
+  }
+
+  header .author.has-key:hover {
+    color: var(--sc-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   time {

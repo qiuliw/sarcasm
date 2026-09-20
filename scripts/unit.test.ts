@@ -15,6 +15,7 @@ function comment(partial: Partial<CommentRecord> & Pick<CommentRecord, 'id' | 'b
     nativeParentId: null,
     replyToAuthor: null,
     author: 'me',
+    authorPubkey: null,
     likes: 0,
     dislikes: 0,
     myVote: null,
@@ -33,8 +34,9 @@ describe('buildCommentForest', () => {
     ];
     const forest = buildCommentForest(rows);
     expect(forest.videoRoots).toHaveLength(1);
-    expect(forest.videoRoots[0].children.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
-    expect(forest.videoRoots[0].children.every((c) => c.children.length === 0)).toBe(true);
+    const root = forest.videoRoots[0]!;
+    expect(root.children.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
+    expect(root.children.every((c) => c.children.length === 0)).toBe(true);
   });
 });
 

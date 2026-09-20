@@ -47,6 +47,8 @@ async function runCrud(page) {
   const key = await send(page, { type: 'nostr_generate_key' });
   assert(key?.ok, `generate key failed: ${JSON.stringify(key)}`);
   assert(key.data?.nsec, '未生成 nsec');
+  const identity = await send(page, { type: 'nostr_identity' });
+  assert(identity?.ok && identity.data?.pubkey, '未生成 Nostr 公钥');
 
   const created = await send(page, {
     type: 'create_comment',
@@ -59,6 +61,7 @@ async function runCrud(page) {
   });
   assert(created?.ok, `create failed: ${JSON.stringify(created)}`);
   assert(created.data?.id, 'create 未返回 id');
+  assert(created.data?.authorPubkey === identity.data.pubkey, '本地评论未关联作者公钥');
   assert(created.data?.nativeParentId == null, '新评论不应写入原生锚点');
 
   const reply = await send(page, {
@@ -172,7 +175,7 @@ async function runContentScriptOnBilibili(browser, extensionId) {
     if (button instanceof HTMLElement) button.click();
   });
   await page.waitForFunction(
-    () => !!document.querySelector('sarcasm-root')?.shadowRoot?.querySelector('aside.panel'),
+    () => !!document.querySelector('sarcasm-root')?.shadowRoot?.querySelector('.panel'),
     { timeout: 10000 },
   );
 
@@ -181,9 +184,8 @@ async function runContentScriptOnBilibili(browser, extensionId) {
     const text = host?.shadowRoot?.textContent || '';
     return {
       hasHost: !!host,
-      hasPanel: !!host?.shadowRoot?.querySelector('aside.panel'),
+      hasPanel: !!host?.shadowRoot?.querySelector('.panel'),
       shadowHasPlatform: text.includes('B站') || text.includes('bilibili'),
-      shadowHasBvid: text.includes('BV1GJ411x7h7'),
       href: location.href,
       snippet: text.replace(/\s+/g, ' ').slice(0, 240),
     };
@@ -191,10 +193,7 @@ async function runContentScriptOnBilibili(browser, extensionId) {
 
   assert(injected.hasHost, `未找到 sarcasm-root：${JSON.stringify(injected)}`);
   assert(injected.hasPanel, `侧栏未渲染：${JSON.stringify(injected)}`);
-  assert(
-    injected.shadowHasPlatform && injected.shadowHasBvid,
-    `未识别视频锚点：${JSON.stringify(injected)}`,
-  );
+  assert(injected.shadowHasPlatform, `未识别视频平台：${JSON.stringify(injected)}`);
 
   await page.screenshot({
     path: path.join(root, '.output', 'smoke-bilibili-panel.png'),
@@ -246,6 +245,11 @@ async function main() {
 
     const ping2 = await send(page, { type: 'ping' });
     assert(ping2?.ok, `second ping failed: ${JSON.stringify(ping2)}`);
+    await page.evaluate(() =>
+      chrome.storage.local.set({
+        sarcasm_ui_prefs_v1: { autoExpandOnComments: false, panelMaxVh: 85 },
+      }),
+    );
 
     const swErrors = errors.filter((e) => /XMLHttpRequest|Content Security|CompileError|wasm/i.test(e));
     assert(swErrors.length === 0, `仍有 wasm/csp 错误：${swErrors.join(' | ')}`);

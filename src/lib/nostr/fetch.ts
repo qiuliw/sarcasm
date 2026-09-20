@@ -63,6 +63,7 @@ function eventToComment(
     nativeParentId: null,
     replyToAuthor: null,
     author,
+    authorPubkey: event.pubkey,
     body,
     likes: 0,
     dislikes: 0,

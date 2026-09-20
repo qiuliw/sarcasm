@@ -85,6 +85,7 @@ async function handle(message: BgRequest): Promise<BgResponse> {
       const record = await createComment({
         ...message.input,
         author: message.input.author || identity.shortLabel,
+        authorPubkey: identity.pubkey,
       });
 
       const payload = {
