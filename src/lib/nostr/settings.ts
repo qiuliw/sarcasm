@@ -18,12 +18,6 @@ export const DEFAULT_RELAYS = [
   'wss://nostr.mom',
 ];
 
-const LEGACY_DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-];
-
 /** 一把密钥 + 其显示名 = 一个身份；同步配置另存同对象 */
 export interface NostrSettings {
   nsec: string | null;
@@ -48,13 +42,6 @@ function normalizeRelays(raw: unknown): string[] {
     .map((r) => r.trim())
     .filter((r) => /^wss:\/\//i.test(r));
   return list.length ? [...new Set(list)] : [...DEFAULT_RELAYS];
-}
-
-function isLegacyDefaultRelays(relays: string[]): boolean {
-  return (
-    relays.length === LEGACY_DEFAULT_RELAYS.length &&
-    LEGACY_DEFAULT_RELAYS.every((relay) => relays.includes(relay))
-  );
 }
 
 function normalizeName(name: string): string {
@@ -84,7 +71,7 @@ export async function loadNostrSettings(): Promise<NostrSettings> {
         ? normalizeName(raw.displayName)
         : ''
       : '',
-    relays: isLegacyDefaultRelays(relays) ? [...DEFAULT_RELAYS] : relays,
+    relays,
   };
 }
 

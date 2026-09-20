@@ -68,9 +68,8 @@
   const highlighted = $derived(highlightId === node.id);
   const authorName = $derived(displayNameHint(node.author, node.authorPubkey));
   const authorNpub = $derived(node.authorPubkey ? shortNpub(node.authorPubkey) : null);
-  const legacyAuthor = $derived(node.author === '我' ? '未知用户' : node.author);
   const authorLabel = $derived(
-    showPubkey || !authorName ? authorNpub || legacyAuthor : authorName,
+    showPubkey || !authorName ? authorNpub || node.author : authorName,
   );
   const canToggleAuthor = $derived(!!node.authorPubkey && !!authorName);
   const initial = $derived((authorLabel || '?').slice(0, 1).toUpperCase());
@@ -85,7 +84,7 @@
   );
   const mentionLabel = $derived(
     showMentionPubkey || !mentionName
-      ? mentionNpub || (node.replyToAuthor === '我' ? null : node.replyToAuthor)
+      ? mentionNpub || node.replyToAuthor
       : mentionName,
   );
 

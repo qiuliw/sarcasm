@@ -12,8 +12,6 @@ export interface CommentRecord {
   videoId: string;
   /** 仅指向一级评论；二级全部挂在同一 parent 下 */
   parentId: string | null;
-  /** 历史字段：曾用于锚定平台原生评论，新评论不再写入 */
-  nativeParentId: string | null;
   /** 回复对象显示名快照 */
   replyToAuthor: string | null;
   /** 回复对象 Nostr 公钥 */

@@ -27,7 +27,6 @@ function comment(partial: Partial<CommentRecord> & Pick<CommentRecord, 'id' | 'b
     platform: 'bilibili-video',
     videoId: 'BV1',
     parentId: null,
-    nativeParentId: null,
     replyToAuthor: null,
     replyToPubkey: null,
     author: 'me',

@@ -97,7 +97,6 @@ async function runCrud(page) {
   assert(created.data?.id, 'create 未返回 id');
   assert(created.data?.authorPubkey === identity.data.pubkey, '本地评论未关联作者公钥');
   assert(created.data?.author.startsWith('npub1'), '无昵称作者应显示 npub 缩写');
-  assert(created.data?.nativeParentId == null, '新评论不应写入原生锚点');
 
   const reply = await send(page, {
     type: 'create_comment',

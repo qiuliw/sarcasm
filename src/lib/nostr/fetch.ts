@@ -77,7 +77,6 @@ function eventToComment(
     platform,
     videoId,
     parentId: replyParentId(event),
-    nativeParentId: null,
     replyToAuthor: reply.displayName,
     replyToPubkey: reply.pubkey,
     author,

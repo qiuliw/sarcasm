@@ -34,7 +34,7 @@ export function displayNameHint(
   pubkey?: string | null,
 ): string | null {
   const value = name?.trim();
-  if (!value || value === '我' || value.startsWith('npub1')) return null;
+  if (!value || value.startsWith('npub1')) return null;
   if (pubkey && value === shortNpub(pubkey)) return null;
   return value;
 }
