@@ -46,6 +46,9 @@ async function handle(message: BgRequest): Promise<BgResponse> {
     case 'ping':
       await ensureDb();
       return { ok: true, data: { pong: true } };
+    case 'open_options':
+      await browser.runtime.openOptionsPage();
+      return { ok: true };
     case 'list_comments':
       return { ok: true, data: await listComments(message.query) };
     case 'create_comment': {

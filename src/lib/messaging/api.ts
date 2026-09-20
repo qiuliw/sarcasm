@@ -13,6 +13,7 @@ import type { BackendId } from '../backends/dispatch';
 
 export type BgRequest =
   | { type: 'ping' }
+  | { type: 'open_options' }
   | { type: 'list_comments'; query: ListCommentsQuery }
   | { type: 'create_comment'; input: CreateCommentInput }
   | { type: 'delete_comment'; id: string }
@@ -65,6 +66,11 @@ export function voteComment(id: string, vote: VoteKind): Promise<CommentRecord> 
 
 export function getStats(): Promise<{ count: number }> {
   return sendBg({ type: 'stats' });
+}
+
+/** content script 没有 openOptionsPage，统一走 background */
+export function openOptions(): Promise<void> {
+  return sendBg({ type: 'open_options' });
 }
 
 export function getNostrIdentity(): Promise<NostrIdentity> {

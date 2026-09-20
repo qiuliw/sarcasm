@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getNostrIdentity, getStats } from '../../lib/messaging/api';
+  import { getNostrIdentity, getStats, openOptions } from '../../lib/messaging/api';
   import type { NostrIdentity } from '../../lib/nostr/settings';
 
   let count = $state<number | null>(null);
@@ -23,7 +23,7 @@
   });
 
   function openSettings() {
-    void browser.runtime.openOptionsPage();
+    void openOptions();
   }
 </script>
 

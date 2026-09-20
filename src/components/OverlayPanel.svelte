@@ -2,7 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import CommentItem from './CommentItem.svelte';
   import Composer from './Composer.svelte';
-  import { createComment, deleteComment, listComments, voteComment } from '../lib/messaging/api';
+  import { createComment, deleteComment, listComments, openOptions, voteComment } from '../lib/messaging/api';
   import { buildCommentForest, resolveOverlayReply } from '../lib/db/tree';
   import type {
     CommentRecord,
@@ -286,7 +286,7 @@
           <button
             type="button"
             class="icon-button"
-            onclick={() => void browser.runtime.openOptionsPage()}
+            onclick={() => void openOptions()}
             title="设置"
             aria-label="设置"
           >
